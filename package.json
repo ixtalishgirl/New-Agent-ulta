@@ -1,0 +1,34 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "artifacts/*",
+    "lib/*",
+    "scripts"
+  ],
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build --config artifacts/ai-agent/vite.config.ts && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "lint": "tsc --build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "npm run typecheck:libs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.14",
+    "@google/genai": "^0.2.0",
+    "@replit/connectors-sdk": "^0.4.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.25.0",
+    "prettier": "^3.5.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.3",
+    "vite": "^6.1.0"
+  }
+}

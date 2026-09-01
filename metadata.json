@@ -1,0 +1,8 @@
+{
+  "name": "Eye Sight Helper AI Agent",
+  "description": "Autonomous AI Agent workspace with chat, terminal execution, file explorer, web scanner, and real-time execution tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

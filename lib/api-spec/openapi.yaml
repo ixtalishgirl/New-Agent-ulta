@@ -1,0 +1,407 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Haley's AI Agent API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: chat
+    description: AI chat operations
+  - name: conversations
+    description: Conversation management
+  - name: files
+    description: File management
+  - name: terminal
+    description: Terminal command execution
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation with its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationWithMessages"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /conversations/{id}/messages:
+    get:
+      operationId: listMessages
+      tags: [chat]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /chat:
+    post:
+      operationId: sendMessage
+      tags: [chat]
+      summary: Send a message to the AI agent and get a response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
+  /files:
+    get:
+      operationId: listFiles
+      tags: [files]
+      summary: List files in a directory
+      parameters:
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: "/"
+      responses:
+        "200":
+          description: File listing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileEntry"
+    post:
+      operationId: createFile
+      tags: [files]
+      summary: Create or update a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileInput"
+      responses:
+        "201":
+          description: File created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileEntry"
+
+  /files/read:
+    get:
+      operationId: readFile
+      tags: [files]
+      summary: Read file contents
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+
+  /files/delete:
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+
+  /terminal:
+    post:
+      operationId: runCommand
+      tags: [terminal]
+      summary: Run a terminal command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandInput"
+      responses:
+        "200":
+          description: Command result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandResult"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [conversations]
+      summary: Get dashboard stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    Conversation:
+      type: object
+      required: [id, title, model, createdAt, messageCount]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        model:
+          type: string
+        createdAt:
+          type: string
+        messageCount:
+          type: integer
+
+    ConversationInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        model:
+          type: string
+
+    ConversationWithMessages:
+      type: object
+      required: [id, title, model, createdAt, messages]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        model:
+          type: string
+        createdAt:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+
+    Message:
+      type: object
+      required: [id, conversationId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+
+    ChatInput:
+      type: object
+      required: [message, conversationId]
+      properties:
+        message:
+          type: string
+        conversationId:
+          type: integer
+        model:
+          type: string
+
+    ChatResponse:
+      type: object
+      required: [reply, conversationId, messageId]
+      properties:
+        reply:
+          type: string
+        conversationId:
+          type: integer
+        messageId:
+          type: integer
+
+    FileEntry:
+      type: object
+      required: [name, path, type, size]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+        size:
+          type: integer
+
+    FileInput:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    FileContent:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    DeleteResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    CommandInput:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+        cwd:
+          type: string
+
+    CommandResult:
+      type: object
+      required: [stdout, stderr, exitCode]
+      properties:
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exitCode:
+          type: integer
+
+    Stats:
+      type: object
+      required: [totalConversations, totalMessages, totalFiles, modelsUsed]
+      properties:
+        totalConversations:
+          type: integer
+        totalMessages:
+          type: integer
+        totalFiles:
+          type: integer
+        modelsUsed:
+          type: array
+          items:
+            type: string
