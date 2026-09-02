@@ -60,6 +60,11 @@ interface DiagnosticResult {
 
 const QUICK_ACTIONS = [
   {
+    label: 'Black Theme (Solid Black & White Text)',
+    icon: <Sparkles className="w-3.5 h-3.5 text-zinc-100" />,
+    prompt: 'mery message ka Clour black kr do and apny he bas text white rhy jaldi kro.',
+  },
+  {
     label: 'Change Color to Light Purple',
     icon: <Sparkles className="w-3.5 h-3.5 text-purple-400" />,
     prompt: 'mery chat ka color light purple karo aur confirm karo.',
@@ -96,11 +101,21 @@ function cleanReply(text: string): string {
   return text
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/^Here's a thinking process:[\s\S]*?(?=\n\n|\n[A-Z]|\nJi|\nMain|\nHere|\n1\.|\*|Yeh)/i, '')
+    .replace(/\[ACTION:\s*[\s\S]*?\]/gi, '')
+    .replace(/\[ACTION_RESULT:\s*[\s\S]*?\]/gi, '')
     .trim();
 }
 
+interface CustomStyles {
+  userBubbleBg?: string;
+  userTextColor?: string;
+  aiBubbleBg?: string;
+  aiTextColor?: string;
+}
+
 export default function App() {
-  const [activeTheme, setActiveTheme] = useState<'light_purple' | 'cyan' | 'emerald' | 'amber'>('light_purple');
+  const [activeTheme, setActiveTheme] = useState<string>('light_purple');
+  const [customStyles, setCustomStyles] = useState<CustomStyles>({});
   const [customNvidiaKey, setCustomNvidiaKey] = useState<string>('');
   const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
   const [systemInfo, setSystemInfo] = useState<{ python: string; pip: string; cwd: string; engine: string; theme?: string } | null>(null);
@@ -154,6 +169,9 @@ export default function App() {
       .then((data) => {
         if (data.theme) {
           setActiveTheme(data.theme);
+        }
+        if (data.customStyles) {
+          setCustomStyles(data.customStyles);
         }
       })
       .catch(() => {});
@@ -254,6 +272,9 @@ export default function App() {
 
       if (data.themeUpdate) {
         setActiveTheme(data.themeUpdate);
+      }
+      if (data.customStyles) {
+        setCustomStyles(data.customStyles);
       }
 
       const assistantMessage: Message = {
@@ -473,7 +494,30 @@ export default function App() {
   };
 
   // Theme Styling Map
-  const themeStyles = {
+  const themeStyles: Record<string, {
+    bgGradient: string;
+    headerBorder: string;
+    headerBadge: string;
+    userBubble: string;
+    aiBubble: string;
+    accentColor: string;
+    buttonPrimary: string;
+    buttonBorder: string;
+    glow: string;
+    inputFocus: string;
+  }> = {
+    black: {
+      bgGradient: 'from-black via-zinc-950 to-black',
+      headerBorder: 'border-zinc-800',
+      headerBadge: 'bg-zinc-900 text-zinc-100 border-zinc-700',
+      userBubble: 'bg-black border border-zinc-700 text-white shadow-xl shadow-black',
+      aiBubble: 'bg-zinc-950 border border-zinc-800 text-white shadow-xl shadow-black',
+      accentColor: 'text-zinc-100',
+      buttonPrimary: 'bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 shadow-zinc-900/30',
+      buttonBorder: 'border-zinc-700 hover:bg-zinc-900 text-zinc-200',
+      glow: 'shadow-zinc-800/20',
+      inputFocus: 'focus:border-zinc-500 focus:ring-zinc-500/20',
+    },
     light_purple: {
       bgGradient: 'from-purple-950/20 via-slate-950 to-purple-950/30',
       headerBorder: 'border-purple-500/30',
@@ -740,14 +784,31 @@ export default function App() {
           </button>
 
           {/* Theme Palette Quick Selector */}
-          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-lg border border-purple-500/20">
+          <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-purple-500/20">
             <button
               onClick={() => {
-                setActiveTheme('light_purple');
+                setActiveTheme('black');
+                setCustomStyles({ userBubbleBg: '#000000', userTextColor: '#ffffff', aiBubbleBg: '#09090b', aiTextColor: '#ffffff' });
                 fetch('/api/config', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ theme: 'light_purple' }),
+                  body: JSON.stringify({ 
+                    theme: 'black',
+                    customStyles: { userBubbleBg: '#000000', userTextColor: '#ffffff', aiBubbleBg: '#09090b', aiTextColor: '#ffffff' }
+                  }),
+                });
+              }}
+              className={`w-5 h-5 rounded-full bg-black border border-zinc-700 ring-2 ${activeTheme === 'black' ? 'ring-white scale-110' : 'ring-transparent opacity-60'} transition-all`}
+              title="Solid Black Theme (#000000 & White Text)"
+            />
+            <button
+              onClick={() => {
+                setActiveTheme('light_purple');
+                setCustomStyles({});
+                fetch('/api/config', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ theme: 'light_purple', customStyles: {} }),
                 });
               }}
               className={`w-5 h-5 rounded-full bg-purple-500 ring-2 ${activeTheme === 'light_purple' ? 'ring-white scale-110' : 'ring-transparent opacity-60'} transition-all`}
@@ -756,10 +817,11 @@ export default function App() {
             <button
               onClick={() => {
                 setActiveTheme('cyan');
+                setCustomStyles({});
                 fetch('/api/config', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ theme: 'cyan' }),
+                  body: JSON.stringify({ theme: 'cyan', customStyles: {} }),
                 });
               }}
               className={`w-5 h-5 rounded-full bg-cyan-500 ring-2 ${activeTheme === 'cyan' ? 'ring-white scale-110' : 'ring-transparent opacity-60'} transition-all`}
@@ -768,10 +830,11 @@ export default function App() {
             <button
               onClick={() => {
                 setActiveTheme('emerald');
+                setCustomStyles({});
                 fetch('/api/config', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ theme: 'emerald' }),
+                  body: JSON.stringify({ theme: 'emerald', customStyles: {} }),
                 });
               }}
               className={`w-5 h-5 rounded-full bg-emerald-500 ring-2 ${activeTheme === 'emerald' ? 'ring-white scale-110' : 'ring-transparent opacity-60'} transition-all`}
@@ -816,6 +879,17 @@ export default function App() {
                         ? `${currentTheme.userBubble} rounded-tr-none font-medium`
                         : `${currentTheme.aiBubble} rounded-tl-none font-normal backdrop-blur-sm`
                     }`}
+                    style={
+                      isUser
+                        ? {
+                            backgroundColor: customStyles.userBubbleBg || undefined,
+                            color: customStyles.userTextColor || undefined,
+                          }
+                        : {
+                            backgroundColor: customStyles.aiBubbleBg || undefined,
+                            color: customStyles.aiTextColor || undefined,
+                          }
+                    }
                   >
                     {isUser ? (
                       <div className="whitespace-pre-wrap">{msg.content}</div>
