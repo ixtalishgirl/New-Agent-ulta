@@ -1,0 +1,1 @@
+Is script ko run karne ke baad, aapko `colorama` package install karna hoga. Aap isse pip se install kar sakte hain:
