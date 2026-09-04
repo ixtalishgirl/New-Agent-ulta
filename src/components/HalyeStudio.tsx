@@ -21,9 +21,13 @@ import {
   Eye,
   Sparkles,
   Command,
-  Maximize2
+  Maximize2,
+  Globe,
+  MousePointer,
+  ExternalLink
 } from 'lucide-react';
-import { AttachedFile, TerminalExecutionResult, VisionAnalysisResult, ChatMessage } from '../types';
+import { AttachedFile, TerminalExecutionResult, VisionAnalysisResult, WebInspectionResult, ChatMessage, NvidiaModelCatalogItem } from '../types';
+import { NvidiaCatalogModal } from './NvidiaCatalogModal';
 
 const DEFAULT_HALYE_CODE = `<!DOCTYPE html>
 <html lang="en">
@@ -129,8 +133,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [code, setCode] = useState<string>(initialCode || DEFAULT_HALYE_CODE);
   const [previewKey, setPreviewKey] = useState<number>(1);
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'vision' | 'code' | 'split'>('preview');
+  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'vision' | 'code' | 'webeyes' | 'split'>('preview');
   const [copied, setCopied] = useState(false);
+
+  // Web Eyes & Touch State
+  const [webUrl, setWebUrl] = useState('https://news.ycombinator.com');
+  const [isInspectingWeb, setIsInspectingWeb] = useState(false);
+  const [webInspectionData, setWebInspectionData] = useState<WebInspectionResult | null>(null);
 
   // Copilot Chat & Input State
   const [prompt, setPrompt] = useState('');
@@ -144,6 +153,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     hasVision: boolean;
     hasTerminal: boolean;
   } | null>(null);
+  const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
+  const [showModelCatalog, setShowModelCatalog] = useState(false);
 
   // Fetch active AI model status on mount
   useEffect(() => {
@@ -158,6 +169,9 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             hasVision: d.hasVision,
             hasTerminal: d.hasTerminal,
           });
+          if (d.catalog) {
+            setCatalog(d.catalog);
+          }
         }
       })
       .catch(() => {});
@@ -167,7 +181,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [terminalInput, setTerminalInput] = useState('');
   const [isExecutingTerminal, setIsExecutingTerminal] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState<Array<{ cmd: string; out: string; err: string; exit: number; ms: number }>>([
-    { cmd: 'python3 --version && pip3 --version', out: 'Python 3.11.2\npip 23.0.1 from /usr/lib/python3/dist-packages/pip (python 3.11)', err: '', exit: 0, ms: 14 },
+    { cmd: 'python3 halye_controller.py --status', out: '{\n  "agent": "Halye Assistant",\n  "status": "ONLINE",\n  "mode": "Direct Bash/Python Automation",\n  "python_version": "3.10.12",\n  "model": "nvidia/nemotron-3-nano-30b-a3b"\n}', err: '', exit: 0, ms: 12 },
     { cmd: 'uname -a', out: 'Linux halye-container 6.6.137+ #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux', err: '', exit: 0, ms: 8 }
   ]);
 
@@ -329,16 +343,23 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         setActivePane('preview');
       }
 
+      if (data.webInspection) {
+        setWebInspectionData(data.webInspection);
+      }
+
       const assistantMessage: ChatMessage = {
         id: 'ast-' + Date.now(),
         role: 'assistant',
         text: data.text || 'Command processed.',
         terminalResult: termResult,
         visionAnalysis: data.visionAnalysis,
+        webInspection: data.webInspection,
         timestamp: new Date().toLocaleTimeString(),
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
-        actionTaken: data.terminalResult
+        actionTaken: data.webInspection
+          ? `Web Eyes Inspected: ${data.webInspection.title || data.webInspection.url}`
+          : data.terminalResult
           ? `Terminal Command: ${data.terminalResult.command}`
           : data.visionAnalysis
           ? 'Reconstructed App from Screenshot'
@@ -361,6 +382,44 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       ]);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Inspect website with Web Eyes & Touch
+  const handleInspectWeb = async (customUrl?: string) => {
+    const target = (customUrl || webUrl).trim();
+    if (!target || isInspectingWeb) return;
+
+    setIsInspectingWeb(true);
+    setActivePane('webeyes');
+
+    try {
+      const res = await fetch('/api/tools/web-browse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: target }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setWebInspectionData(data);
+        const touchCount = (data.touchable_elements?.buttons?.length || 0) + (data.touchable_elements?.interactive_links?.length || 0) + (data.touchable_elements?.inputs?.length || 0);
+        
+        // Add chat feedback
+        const eyeMessage: ChatMessage = {
+          id: 'ast-eye-' + Date.now(),
+          role: 'assistant',
+          text: `Jee Malik Halye! Maine apni ankhein (Web Eyes) kholi hain aur **${data.url}** (${data.title || 'Page'}) ko dekh liya hai. ${touchCount} interactive elements (buttons, inputs, links) detect kiye hain. Web Eyes & Touch tab mein inspection report hazir hai!`,
+          webInspection: data,
+          timestamp: new Date().toLocaleTimeString(),
+          actionTaken: `Web Eyes Inspected: ${data.title}`,
+        };
+        setConversation((prev) => [...prev, eyeMessage]);
+      }
+    } catch (err: any) {
+      console.error('Web inspection error:', err);
+    } finally {
+      setIsInspectingWeb(false);
     }
   };
 
@@ -450,10 +509,17 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] font-mono">
-              <span className={`w-1.5 h-1.5 rounded-full ${modelInfo?.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className="text-zinc-200 font-semibold">Halye Assistant</span>
-            </div>
+            <button
+              onClick={() => setShowModelCatalog(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-amber-500/30 text-[10px] font-mono transition cursor-pointer shadow-sm"
+              title="Click to switch to Hermes 4 70B Uncensored or test model response speed"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${modelInfo?.status === 'online' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+              <span className="text-zinc-200 font-semibold truncate max-w-[140px]">
+                {modelInfo?.activeModel ? modelInfo.activeModel.split('/').pop() : 'llama-3.2-11b-vision-instruct'}
+              </span>
+              <span className="px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold">MODELS</span>
+            </button>
             <button
               onClick={() => setActivePane('terminal')}
               className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-zinc-300 text-[11px] font-mono flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
@@ -513,7 +579,9 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         )}
                         <div className="truncate max-w-[140px]">
                           <div className="text-[11px] font-medium text-white truncate">{file.name}</div>
-                          <div className="text-[9px] text-zinc-500 font-mono">{(file.size / 1024).toFixed(1)} KB</div>
+                          <div className="text-[9px] text-zinc-500 font-mono">
+                            {typeof file.size === 'number' ? `${(file.size / 1024).toFixed(1)} KB` : (file.size || '')}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -619,6 +687,45 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                           </span>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Web Eyes & Touch Perception Card */}
+                {msg.webInspection && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-zinc-800 p-3 space-y-2.5 font-mono">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-white">
+                      <span className="flex items-center gap-1.5 text-cyan-400">
+                        <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                        Web Eyes Perception: {msg.webInspection.title || msg.webInspection.url}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setWebInspectionData(msg.webInspection || null);
+                          setActivePane('webeyes');
+                        }}
+                        className="px-2 py-0.5 rounded bg-cyan-500 text-black font-bold text-[10px] hover:bg-cyan-400 transition cursor-pointer"
+                      >
+                        Inspect in Web Eyes
+                      </button>
+                    </div>
+
+                    <div className="text-[10px] text-zinc-300 leading-relaxed bg-black/60 p-2 rounded-lg border border-zinc-900">
+                      {msg.webInspection.human_readable_summary}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-300 flex items-center gap-1">
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        {msg.webInspection.touchable_elements?.interactive_links?.length || 0} Links
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-300 flex items-center gap-1">
+                        <MousePointer className="w-2.5 h-2.5" />
+                        {msg.webInspection.touchable_elements?.buttons?.length || 0} Buttons
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-amber-300">
+                        📝 {msg.webInspection.touchable_elements?.inputs?.length || 0} Input Fields
+                      </span>
                     </div>
                   </div>
                 )}
@@ -754,6 +861,17 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             >
               <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
               <span>Vision Lab</span>
+            </button>
+
+            <button
+              id="tab-webeyes-btn"
+              onClick={() => setActivePane('webeyes')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'webeyes' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Web Eyes & Touch</span>
             </button>
 
             <button
@@ -954,7 +1072,11 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                   <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-850 space-y-3">
                     <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
                       <span>Source: {activeVisionFile.name}</span>
-                      <span>{(activeVisionFile.size / 1024).toFixed(1)} KB</span>
+                      <span>
+                        {typeof activeVisionFile.size === 'number'
+                          ? `${(activeVisionFile.size / 1024).toFixed(1)} KB`
+                          : (activeVisionFile.size || '')}
+                      </span>
                     </div>
                     <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-black flex items-center justify-center max-h-[480px]">
                       <img
@@ -1049,8 +1171,274 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               />
             </div>
           )}
+
+          {/* 5. WEB EYES & TOUCH INTERNET INSPECTOR */}
+          {activePane === 'webeyes' && (
+            <div className="w-full h-full flex flex-col bg-black overflow-y-auto p-4 sm:p-6 space-y-5">
+              {/* Header Banner */}
+              <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-850 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      <Globe className="w-4 h-4" />
+                    </span>
+                    <h2 className="text-base font-bold text-white tracking-wide">Halye Web Eyes & Touch Perception</h2>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-semibold">
+                      HUMAN PERCEPTION ACTIVE
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 font-mono">
+                    Kisi bhi website par ja kar usay ankhon se dekhne aur buttons, forms, links ko touch karne ki ability.
+                  </p>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
+                  {[
+                    { label: 'HackerNews', url: 'https://news.ycombinator.com' },
+                    { label: 'Example', url: 'https://example.com' },
+                    { label: 'Wikipedia', url: 'https://en.wikipedia.org' },
+                  ].map((p, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setWebUrl(p.url);
+                        handleInspectWeb(p.url);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-[11px] font-mono text-zinc-300 transition cursor-pointer"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* URL Address Bar with Touch & Eye Controls */}
+              <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-850 flex items-center gap-3">
+                <div className="flex-1 flex items-center gap-2 bg-black px-3.5 py-2.5 rounded-xl border border-zinc-800">
+                  <Globe className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <input
+                    type="url"
+                    value={webUrl}
+                    onChange={(e) => setWebUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleInspectWeb()}
+                    placeholder="Enter website URL (e.g. https://news.ycombinator.com)"
+                    className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-600 outline-none font-mono"
+                  />
+                </div>
+                <button
+                  onClick={() => handleInspectWeb()}
+                  disabled={isInspectingWeb || !webUrl.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95 disabled:opacity-50"
+                >
+                  {isInspectingWeb ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Inspecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4" />
+                      <span>Open Web Eyes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Inspection Results */}
+              {webInspectionData ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  {/* Left 2 Cols: Page Perception & Text */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* Page Identity Card */}
+                    <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-850 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-cyan-400 font-mono uppercase tracking-wider">Perceived Page Identity</span>
+                        <a
+                          href={webInspectionData.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white transition font-mono"
+                        >
+                          <span>{webInspectionData.url}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                      <h1 className="text-lg font-bold text-white tracking-wide">
+                        {webInspectionData.title || 'Untitled Page'}
+                      </h1>
+                      {webInspectionData.description && (
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {webInspectionData.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Human Perception Summary */}
+                    <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-850 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-white">
+                        <Eye className="w-4 h-4 text-cyan-400" />
+                        <span>Human-Level Content Perception (Ankhon Dekha Haal)</span>
+                      </div>
+                      <div className="p-4 rounded-xl bg-black border border-zinc-850 text-xs text-zinc-300 font-mono leading-relaxed whitespace-pre-wrap">
+                        {webInspectionData.human_readable_summary || 'No text extracted.'}
+                      </div>
+                    </div>
+
+                    {/* Headings Detected */}
+                    {webInspectionData.headings && webInspectionData.headings.length > 0 && (
+                      <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-850 space-y-3">
+                        <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
+                          Section Headings Detected ({webInspectionData.headings.length})
+                        </span>
+                        <div className="space-y-1.5">
+                          {webInspectionData.headings.map((h, i) => (
+                            <div key={i} className="p-2.5 rounded-xl bg-black border border-zinc-850 text-xs text-zinc-200 font-mono flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+                              <span>{h}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Col: Touch Interaction Points (Buttons, Links, Inputs) */}
+                  <div className="space-y-4">
+                    {/* Touch Capabilities Box */}
+                    <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-850 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-white">
+                        <MousePointer className="w-4 h-4 text-emerald-400" />
+                        <span>Interactive Touch Points</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 font-mono leading-relaxed">
+                        Buttons, links aur form inputs jo Halye touch aur interact kar sakta hai:
+                      </p>
+
+                      {/* Interactive Buttons */}
+                      <div className="space-y-1.5 pt-2">
+                        <span className="text-[10px] text-emerald-400 font-mono uppercase tracking-wider">
+                          Clickable Buttons ({webInspectionData.touchable_elements?.buttons?.length || 0})
+                        </span>
+                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                          {webInspectionData.touchable_elements?.buttons?.length ? (
+                            webInspectionData.touchable_elements.buttons.map((btn, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleSendPrompt(`Malik Halye hukum: is webpage ka button "${btn.text}" touch/execute karo.`)}
+                                className="w-full text-left p-2 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-emerald-300 flex items-center justify-between transition cursor-pointer"
+                              >
+                                <span className="truncate">{btn.text || 'Button'}</span>
+                                <span className="text-[9px] text-zinc-500 uppercase">Touch</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="text-[10px] text-zinc-600 font-mono italic">No buttons detected on page</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interactive Form Inputs */}
+                      <div className="space-y-1.5 pt-2">
+                        <span className="text-[10px] text-amber-400 font-mono uppercase tracking-wider">
+                          Form Inputs ({webInspectionData.touchable_elements?.inputs?.length || 0})
+                        </span>
+                        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                          {webInspectionData.touchable_elements?.inputs?.length ? (
+                            webInspectionData.touchable_elements.inputs.map((inp, i) => (
+                              <div key={i} className="p-2 rounded-lg bg-black border border-zinc-800 text-[11px] font-mono text-amber-300 flex items-center justify-between">
+                                <span className="truncate">{inp.placeholder || inp.name || inp.type || 'Input Field'}</span>
+                                <span className="text-[9px] text-zinc-500 uppercase">{inp.type || inp.tag}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-[10px] text-zinc-600 font-mono italic">No input fields detected</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interactive Links */}
+                      <div className="space-y-1.5 pt-2">
+                        <span className="text-[10px] text-cyan-400 font-mono uppercase tracking-wider">
+                          Interactive Links ({webInspectionData.touchable_elements?.interactive_links?.length || 0})
+                        </span>
+                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                          {webInspectionData.touchable_elements?.interactive_links?.length ? (
+                            webInspectionData.touchable_elements.interactive_links.map((lnk, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  if (lnk.href.startsWith('http')) {
+                                    setWebUrl(lnk.href);
+                                    handleInspectWeb(lnk.href);
+                                  }
+                                }}
+                                className="w-full text-left p-2 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-cyan-300 flex items-center justify-between transition cursor-pointer"
+                              >
+                                <span className="truncate">{lnk.text || lnk.href}</span>
+                                <span className="text-[9px] text-zinc-500">Visit</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="text-[10px] text-zinc-600 font-mono italic">No links detected</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Card: Reconstruct in AMOLED */}
+                    <div className="p-5 rounded-2xl bg-zinc-950 border border-cyan-500/30 space-y-3">
+                      <h4 className="text-xs font-bold text-white">Rebuild in Pitch Black AMOLED</h4>
+                      <p className="text-[11px] text-zinc-400 font-mono leading-relaxed">
+                        Halye Assistant is website ko human eyes se dekh kar live AMOLED application mein rebuild kar sakta hai.
+                      </p>
+                      <button
+                        onClick={() => {
+                          handleSendPrompt(`Jee Malik Halye, please reconstruct this inspected webpage (${webInspectionData.url} - ${webInspectionData.title}) as a modern Pitch Black AMOLED web application.`);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>Reconstruct Site in Live Preview</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-12 rounded-2xl bg-zinc-950 border border-dashed border-zinc-850 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-black border border-zinc-800 flex items-center justify-center text-cyan-400">
+                    <Globe className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1 max-w-md">
+                    <h3 className="text-sm font-bold text-white">Web Eyes & Touch Engine Ready</h3>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Enter any URL above or click a preset to have Halye Assistant visit, perceive and analyze the interactive touch elements.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleInspectWeb('https://news.ycombinator.com')}
+                    className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Try HackerNews Inspection</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      <NvidiaCatalogModal
+        isOpen={showModelCatalog}
+        onClose={() => setShowModelCatalog(false)}
+        activeModel={modelInfo?.activeModel || 'meta/llama-3.2-11b-vision-instruct'}
+        catalog={catalog}
+        onModelSwitched={(modelId, provider) => {
+          setModelInfo((prev) => prev ? { ...prev, activeModel: modelId, provider } : null);
+        }}
+      />
     </div>
   );
 };
