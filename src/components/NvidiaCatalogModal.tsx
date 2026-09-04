@@ -284,7 +284,7 @@ export const NvidiaCatalogModal: React.FC<NvidiaCatalogModalProps> = ({
               <span className="text-[10px] font-mono text-zinc-500">Auto-saved to LocalStorage</span>
             </div>
             <p className="text-[11px] text-zinc-400 leading-normal">
-              Agar aap OpenRouter ya Groq se Nous Hermes 4 70B ya Llama 3.3 70B call karna chahte hain to yahan apni API key paste karein. Agar key na ho, to app automatic built-in NVIDIA NIM Vision engine par operate karegi!
+              Agar aap OpenRouter ya Groq se Nous Hermes 4 70B ya Llama 3.3 70B call karna chahte hain to yahan apni API key paste karein. Agar key na ho, to app automatic built-in Gemini 3.1 Flash / NVIDIA Vision engine par ultra speed se operate karegi!
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

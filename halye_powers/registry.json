@@ -1,0 +1,68 @@
+[
+  {
+    "id": "power_web_navigator",
+    "name": "Playwright & Web Touch Navigator",
+    "description": "Any website par jakar usay human eyes se dekhna, links, buttons aur forms ko touch/click karna.",
+    "category": "web",
+    "command": "python3 halye_powers/web_navigator.py",
+    "status": "active",
+    "version": "1.2.0",
+    "invocations": 14,
+    "createdAt": "2026-09-04T12:00:00Z"
+  },
+  {
+    "id": "power_python_runner",
+    "name": "Python 3 Execution Engine",
+    "description": "Python algorithms, data processing, math computations aur scripts direct execute karna.",
+    "category": "code",
+    "command": "python3 halye_powers/python_runner.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 32,
+    "createdAt": "2026-09-04T12:00:00Z"
+  },
+  {
+    "id": "power_bash_shell",
+    "name": "Bash & Linux Root Shell",
+    "description": "Direct Linux container commands (ls, cat, curl, git, grep, top) run karna.",
+    "category": "system",
+    "command": "python3 halye_powers/bash_runner.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 45,
+    "createdAt": "2026-09-04T12:00:00Z"
+  },
+  {
+    "id": "power_pip_manager",
+    "name": "Pip Package Manager",
+    "description": "Python packages (requests, beautifulsoup4, rich, numpy, etc.) install aur manage karna.",
+    "category": "system",
+    "command": "python3 halye_powers/pip_manager.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 9,
+    "createdAt": "2026-09-04T12:00:00Z"
+  },
+  {
+    "id": "power_autonomous_builder",
+    "name": "Autonomous Power Builder",
+    "description": "Malik Halye ke hukum par khud nayi script likhna, syntax test karna aur nayi powers register karna.",
+    "category": "autonomous",
+    "command": "python3 halye_powers/power_builder.py",
+    "status": "active",
+    "version": "2.0.0",
+    "invocations": 6,
+    "createdAt": "2026-09-04T12:00:00Z"
+  },
+  {
+    "id": "power_crypto_price_tracker",
+    "name": "Crypto Price Tracker",
+    "description": "Tracks Bitcoin and Ethereum real-time prices",
+    "category": "finance",
+    "command": "python3 halye_powers/power_crypto_price_tracker.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 1,
+    "createdAt": "2026-09-04T15:06:35.503175Z"
+  }
+]

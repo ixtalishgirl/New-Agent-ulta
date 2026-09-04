@@ -68,11 +68,11 @@ export interface NvidiaModelCatalogItem {
   speedRating: string;
   description: string;
   strengths: string[];
-  provider?: 'openrouter' | 'groq' | 'nvidia' | 'custom';
+  provider?: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
 }
 
 export interface CustomModelSettings {
-  provider: 'openrouter' | 'groq' | 'nvidia' | 'custom';
+  provider: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
   model: string;
   apiKey?: string;
   baseUrl?: string;
