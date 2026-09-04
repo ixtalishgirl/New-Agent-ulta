@@ -1,6 +1,6 @@
 {
   "name": "Halye AI Assistant",
-  "description": "Concise, direct, uncensored AI assistant built by Halye with instant execution in Roman Urdu and English.",
+  "description": "Autonomous AI Developer Studio with live real-time website builder, GitHub repo connector, attached assets, and original working terminal.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
