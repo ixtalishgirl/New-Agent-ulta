@@ -111,14 +111,17 @@ def inspect_url(url: str):
                 "inputs": parser.inputs[:12],
                 "interactive_links": links
             },
-            "summary": summary
+            "summary": summary,
+            "human_readable_summary": summary
         }
     except Exception as e:
+        err_msg = str(e)
         return {
             "success": False,
             "url": url,
-            "error": str(e),
-            "summary": f"Could not inspect URL: {e}"
+            "error": err_msg,
+            "summary": f"Could not inspect URL: {err_msg}",
+            "human_readable_summary": f"Could not inspect URL: {err_msg}"
         }
 
 def touch_element(url: str, target: str):

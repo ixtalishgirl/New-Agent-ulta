@@ -252,11 +252,47 @@ if __name__ == "__main__":
         idx = args.index("--run-power")
         power_id = args[idx+1] if idx + 1 < len(args) else ""
         extra_args = args[idx+2:] if idx + 2 < len(args) else []
-        script_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halye_powers", f"{power_id}.py")
-        if not os.path.exists(script_file):
-            script_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halye_powers", f"power_{power_id}.py")
+        powers_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halye_powers")
+        registry_file = os.path.join(powers_dir, "registry.json")
 
-        if os.path.exists(script_file):
+        script_file = None
+
+        # 1. Lookup in registry.json
+        if os.path.exists(registry_file):
+            try:
+                with open(registry_file, "r", encoding="utf-8") as f:
+                    powers = json.load(f)
+                for p in powers:
+                    if p.get("id") == power_id or p.get("name", "").lower() == power_id.lower():
+                        cmd = p.get("command", "")
+                        # e.g. "python3 halye_powers/web_navigator.py"
+                        parts = cmd.split()
+                        for part in parts:
+                            if part.endswith(".py"):
+                                script_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), part)
+                                break
+                        # Update invocation count
+                        p["invocations"] = p.get("invocations", 0) + 1
+                        break
+                with open(registry_file, "w", encoding="utf-8") as f:
+                    json.dump(powers, f, indent=2)
+            except Exception:
+                pass
+
+        # 2. File fallback resolution
+        if not script_file or not os.path.exists(script_file):
+            candidates = [
+                os.path.join(powers_dir, f"{power_id}.py"),
+                os.path.join(powers_dir, f"power_{power_id}.py"),
+                os.path.join(powers_dir, f"{power_id.replace('power_', '')}.py"),
+                os.path.join(powers_dir, f"{power_id.replace('power_', '')}_runner.py"),
+            ]
+            for cand in candidates:
+                if os.path.exists(cand):
+                    script_file = cand
+                    break
+
+        if script_file and os.path.exists(script_file):
             res = subprocess.run([sys.executable, script_file] + extra_args, capture_output=True, text=True)
             if res.stdout:
                 print(res.stdout, end="")
@@ -264,7 +300,7 @@ if __name__ == "__main__":
                 print(res.stderr, file=sys.stderr, end="")
             sys.exit(res.returncode)
         else:
-            print(json.dumps({"error": f"Power '{power_id}' not found in halye_powers/"}))
+            print(json.dumps({"error": f"Power '{power_id}' not found in halye_powers/ (checked registry and direct scripts)"}))
             sys.exit(1)
 
     if "--browse" in args:

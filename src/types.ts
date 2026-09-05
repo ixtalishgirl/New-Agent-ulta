@@ -59,6 +59,11 @@ export interface ChatMessage {
   fileCreated?: { path: string; name: string; size: number };
   suggestedPane?: 'preview' | 'terminal' | 'workspace' | 'powers' | 'webeyes' | 'vision' | 'code';
   generatedCode?: string;
+  executionPlan?: {
+    thought?: string;
+    steps: string[];
+  };
+  auditResult?: any;
   model?: string;
   provider?: string;
   actionTaken?: string;

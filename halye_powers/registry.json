@@ -86,5 +86,27 @@
     "version": "1.0.0",
     "invocations": 18,
     "createdAt": "2026-09-05T08:00:00Z"
+  },
+  {
+    "id": "power_self_modifier",
+    "name": "Autonomous Self-Modifier & Evolver",
+    "description": "Halye Assistant ka apna code, scripts aur tools khud modify karna, patch lagana aur naye powers autonomously create karna.",
+    "category": "autonomous",
+    "command": "python3 halye_powers/power_self_modifier.py",
+    "status": "active",
+    "version": "2.1.0",
+    "invocations": 1,
+    "createdAt": "2026-09-05T08:30:00Z"
+  },
+  {
+    "id": "power_bug_bounty",
+    "name": "Autonomous Bug Hunter & Self-Tester",
+    "description": "HTML/JS/CSS code aur websites ki deep bug bounty karna, syntax errors pakadna aur automatic test scripts run karna.",
+    "category": "autonomous",
+    "command": "python3 halye_powers/power_bug_bounty.py",
+    "status": "active",
+    "version": "2.0.0",
+    "invocations": 1,
+    "createdAt": "2026-09-05T08:30:00Z"
   }
 ]
