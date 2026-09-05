@@ -46,7 +46,7 @@
   {
     "id": "power_autonomous_builder",
     "name": "Autonomous Power Builder",
-    "description": "Malik Halye ke hukum par khud nayi script likhna, syntax test karna aur nayi powers register karna.",
+    "description": "Nayi script likhna, syntax test karna aur custom powers register karna.",
     "category": "autonomous",
     "command": "python3 halye_powers/power_builder.py",
     "status": "active",
@@ -64,5 +64,27 @@
     "version": "1.0.0",
     "invocations": 1,
     "createdAt": "2026-09-04T15:06:35.503175Z"
+  },
+  {
+    "id": "power_zip_inspector",
+    "name": "ZIP Archive Inspector & Extractor",
+    "description": "Zips ke andar ki files check karna, uncompressed size dekhna, extract karna aur nayi zip banana.",
+    "category": "system",
+    "command": "python3 halye_powers/zip_inspector.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 2,
+    "createdAt": "2026-09-05T07:30:00Z"
+  },
+  {
+    "id": "power_live_app_runner",
+    "name": "Live Web App & Artifact Sandbox Engine",
+    "description": "Any HTML/JS/CSS website, calculator ya app ko live run karna, browser iframe me execute karna aur real-time DOM changes apply karna.",
+    "category": "web",
+    "command": "python3 halye_powers/live_app_runner.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 18,
+    "createdAt": "2026-09-05T08:00:00Z"
   }
 ]

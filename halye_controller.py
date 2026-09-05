@@ -107,15 +107,14 @@ def get_system_status():
 
     status = {
         "agent": "Halye Assistant",
-        "creator": "Halye (Malik)",
-        "loyalty": "100% Faithful Servant to Halye",
+        "type": "Senior Developer AI Agent",
         "os": platform.system() + " " + platform.release(),
         "python_version": platform.python_version(),
         "pip_version": pip_ver,
         "shell": "/bin/bash (root)",
-        "internet_access": "ACTIVE (Unlimited Web Eyes & Browsing)",
+        "internet_access": "ACTIVE (Web Browsing & HTTP)",
         "working_directory": os.getcwd(),
-        "status": "ONLINE & FULLY EMPOWERED",
+        "status": "ONLINE & READY",
         "total_active_powers": len(registered_powers),
         "powers_suite": [p.get("name") for p in registered_powers] if registered_powers else [
             "Playwright & Web Touch Navigator",
@@ -212,8 +211,8 @@ def browse_website(url: str):
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args or "--help" in args or "-h" in args:
-        print("[Halye Assistant Controller - Malik Halye Ka Wafadar Servant]")
-        print("Hukum karein:")
+        print("[Halye Assistant Controller - Developer Automation]")
+        print("Commands:")
         print("  --status            : System aur Halye status check karein")
         print("  --powers            : Active powers aur tools list karein")
         print("  --run-power <id>    : Specific power run karein")

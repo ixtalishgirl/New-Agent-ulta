@@ -24,95 +24,432 @@ import {
   Maximize2,
   Globe,
   MousePointer,
-  ExternalLink
+  ExternalLink,
+  FolderTree,
+  Zap,
+  Archive,
+  Trash2,
+  Edit2,
+  MessageSquare,
+  ChevronDown,
+  Sliders,
+  Wand2,
+  Volume2,
+  RefreshCw,
+  Palette,
+  PlaySquare
 } from 'lucide-react';
-import { AttachedFile, TerminalExecutionResult, VisionAnalysisResult, WebInspectionResult, ChatMessage, NvidiaModelCatalogItem } from '../types';
+import { 
+  AttachedFile, 
+  TerminalExecutionResult, 
+  VisionAnalysisResult, 
+  WebInspectionResult, 
+  ChatMessage, 
+  NvidiaModelCatalogItem,
+  ZipInspectionResult,
+  HalyePowerItem,
+  ChatSession
+} from '../types';
 import { NvidiaCatalogModal } from './NvidiaCatalogModal';
+import { WorkspaceExplorer } from './WorkspaceExplorer';
+import { PowersSuite } from './PowersSuite';
+import { ScreenshotModal } from './ScreenshotModal';
 
-const DEFAULT_HALYE_CODE = `<!DOCTYPE html>
+export const DEFAULT_CALCULATOR_CODE = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halye AMOLED Stealth Workspace</title>
+  <title>AMOLED Cyber Calculator</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; }
-    code, pre { font-family: 'JetBrains Mono', monospace; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #000000; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .neon-glow { filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.4)); }
   </style>
 </head>
-<body class="bg-black text-zinc-100 min-h-screen p-6 sm:p-10 flex flex-col justify-center selection:bg-cyan-500 selection:text-black">
-  <div class="max-w-4xl mx-auto w-full space-y-6">
-    <!-- Stealth Header Card -->
-    <div class="p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl relative overflow-hidden">
-      <div class="absolute -right-20 -top-20 w-60 h-60 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
-      
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-xs font-semibold uppercase mb-4">
-        ⚡ Halye Autonomous Agent
-      </div>
-      
-      <h1 class="text-3xl sm:text-4xl font-extrabold mb-3 text-white tracking-tight">
-        Pure AMOLED Live Application
-      </h1>
-      
-      <p class="text-zinc-400 mb-6 leading-relaxed max-w-2xl text-sm sm:text-base">
-        Original Linux Terminal (Bash, Python 3.11, Pip 23.0) and God-Level Screenshot Vision Perception active. Real commands execute in real-time.
-      </p>
+<body class="bg-black text-zinc-100 min-h-screen p-4 sm:p-8 flex flex-col items-center justify-center selection:bg-cyan-500 selection:text-black">
+  <div class="max-w-md mx-auto w-full bg-zinc-950/95 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+    <!-- Ambient Neon Cyber Glow -->
+    <div class="absolute -right-20 -top-20 w-60 h-60 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -left-20 -bottom-20 w-60 h-60 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
-      <!-- System Status Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="p-4 rounded-2xl bg-black border border-zinc-800/80">
-          <div class="text-[11px] text-zinc-500 font-mono mb-1">TERMINAL RUNTIME</div>
-          <div class="text-sm font-bold text-white flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Bash, Pip & Python
-          </div>
-        </div>
-        <div class="p-4 rounded-2xl bg-black border border-zinc-800/80">
-          <div class="text-[11px] text-zinc-500 font-mono mb-1">VISION LAB</div>
-          <div class="text-sm font-bold text-cyan-400">God-Level Perception</div>
-        </div>
-        <div class="p-4 rounded-2xl bg-black border border-zinc-800/80">
-          <div class="text-[11px] text-zinc-500 font-mono mb-1">THEME ARCHETYPE</div>
-          <div class="text-sm font-bold text-white font-mono">#000000 Pitch Black</div>
-        </div>
+    <!-- Header & Live Real-Time Controls -->
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-zinc-900 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        <span class="font-bold text-white tracking-wider uppercase text-[11px]">Cyber Matrix Calc</span>
+        <span id="mode-badge" class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono text-[10px]">STD</span>
       </div>
 
-      <!-- Interactive Playground Card -->
-      <div class="p-6 rounded-2xl bg-black border border-zinc-800 space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-bold text-zinc-200">Live Client-Side Event Engine</h3>
-          <span id="counter-badge" class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-mono">Clicks: 0</span>
+      <div class="flex items-center gap-1.5">
+        <!-- Live Color Palette Switcher -->
+        <div class="flex items-center gap-1 mr-1">
+          <button onclick="setCalcTheme('cyan')" title="Cyan Stealth" class="w-3.5 h-3.5 rounded-full bg-cyan-400 ring-1 ring-cyan-500/50 hover:scale-125 transition cursor-pointer"></button>
+          <button onclick="setCalcTheme('emerald')" title="Emerald Neon" class="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-1 ring-emerald-500/50 hover:scale-125 transition cursor-pointer"></button>
+          <button onclick="setCalcTheme('purple')" title="Violet Cyber" class="w-3.5 h-3.5 rounded-full bg-purple-400 ring-1 ring-purple-500/50 hover:scale-125 transition cursor-pointer"></button>
+          <button onclick="setCalcTheme('rose')" title="Rose AMOLED" class="w-3.5 h-3.5 rounded-full bg-rose-400 ring-1 ring-rose-500/50 hover:scale-125 transition cursor-pointer"></button>
         </div>
-        <div class="flex items-center gap-3">
-          <button onclick="incrementClicks()" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs transition active:scale-95 cursor-pointer shadow-lg shadow-cyan-500/20">
-            + Click Counter
-          </button>
-          <button onclick="resetClicks()" class="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white font-medium text-xs transition cursor-pointer">
-            Reset
-          </button>
-          <span id="click-feedback" class="text-xs text-emerald-400 font-mono hidden">✔ State Updated!</span>
-        </div>
+
+        <!-- Audio Haptic Toggle -->
+        <button id="sound-btn" onclick="toggleSound()" class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-cyan-400 transition cursor-pointer" title="Sound Effects">
+          🔊
+        </button>
+
+        <!-- Scientific Mode Toggle -->
+        <button id="sci-toggle-btn" onclick="toggleSciMode()" class="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-mono text-[10px] font-bold transition cursor-pointer">
+          ⚡ Sci
+        </button>
+
+        <!-- History Drawer Toggle -->
+        <button onclick="toggleHistory()" class="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-mono text-[10px] transition cursor-pointer">
+          📜 Hist
+        </button>
       </div>
+    </div>
+
+    <!-- AMOLED Dual-Line Display -->
+    <div class="w-full bg-black border border-zinc-800 rounded-2xl p-4 mb-4 font-mono select-none">
+      <div id="calc-history-line" class="text-xs text-zinc-500 text-right min-h-[18px] overflow-hidden whitespace-nowrap"></div>
+      <div id="calc-display" class="text-right text-3xl sm:text-4xl font-extrabold text-cyan-400 overflow-x-auto min-h-[48px] flex items-center justify-end tracking-tight neon-glow">0</div>
+    </div>
+
+    <!-- Collapsible Scientific Keypad -->
+    <div id="sci-keypad" class="hidden grid grid-cols-5 gap-1.5 mb-2 font-mono text-xs">
+      <button onclick="calcSci('sin')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">sin</button>
+      <button onclick="calcSci('cos')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">cos</button>
+      <button onclick="calcSci('tan')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">tan</button>
+      <button onclick="calcSci('sqrt')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">√x</button>
+      <button onclick="calcSci('sqr')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">x²</button>
+
+      <button onclick="calcSci('log')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">log</button>
+      <button onclick="calcSci('ln')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">ln</button>
+      <button onclick="calcSci('pi')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">π</button>
+      <button onclick="calcSci('e')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">e</button>
+      <button onclick="calcSci('percent')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">%</button>
+
+      <button onclick="calcSci('pow')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-cyan-300 font-bold active:scale-95 transition cursor-pointer">xʸ</button>
+      <button onclick="calcSci('parenOpen')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 font-bold active:scale-95 transition cursor-pointer">(</button>
+      <button onclick="calcSci('parenClose')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 font-bold active:scale-95 transition cursor-pointer">)</button>
+      <button onclick="calcSci('inv')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 font-bold active:scale-95 transition cursor-pointer">1/x</button>
+      <button onclick="calcSci('neg')" class="p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 font-bold active:scale-95 transition cursor-pointer">±</button>
+    </div>
+
+    <!-- Main Standard Keypad Grid -->
+    <div class="grid grid-cols-4 gap-2 font-mono text-sm sm:text-base">
+      <button onclick="clearCalc()" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-rose-400 font-bold active:scale-95 transition border border-rose-500/20 cursor-pointer">AC</button>
+      <button onclick="delCalc()" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-amber-400 font-bold active:scale-95 transition border border-amber-500/20 cursor-pointer">⌫</button>
+      <button onclick="calcSci('percent')" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-cyan-400 font-bold active:scale-95 transition cursor-pointer">%</button>
+      <button onclick="calcOp('/')" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-cyan-400 font-bold active:scale-95 transition cursor-pointer">÷</button>
+      
+      <button onclick="calcNum(7)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">7</button>
+      <button onclick="calcNum(8)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">8</button>
+      <button onclick="calcNum(9)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">9</button>
+      <button onclick="calcOp('*')" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-cyan-400 font-bold active:scale-95 transition cursor-pointer">×</button>
+      
+      <button onclick="calcNum(4)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">4</button>
+      <button onclick="calcNum(5)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">5</button>
+      <button onclick="calcNum(6)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">6</button>
+      <button onclick="calcOp('-')" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-cyan-400 font-bold active:scale-95 transition cursor-pointer">-</button>
+      
+      <button onclick="calcNum(1)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">1</button>
+      <button onclick="calcNum(2)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">2</button>
+      <button onclick="calcNum(3)" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">3</button>
+      <button onclick="calcOp('+')" class="p-3 sm:p-3.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-cyan-400 font-bold active:scale-95 transition cursor-pointer">+</button>
+      
+      <button onclick="calcNum(0)" class="col-span-2 p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-medium active:scale-95 transition border border-zinc-850 cursor-pointer">0</button>
+      <button onclick="calcDot()" class="p-3 sm:p-3.5 bg-zinc-900/70 hover:bg-zinc-800 rounded-xl text-white font-bold active:scale-95 transition border border-zinc-850 cursor-pointer">.</button>
+      <button onclick="calcEqual()" class="p-3 sm:p-3.5 bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold rounded-xl flex items-center justify-center text-xl active:scale-95 transition shadow-lg shadow-cyan-500/25 cursor-pointer">=</button>
+    </div>
+
+    <!-- History Tape Slide-Down Drawer -->
+    <div id="history-drawer" class="hidden mt-4 pt-3 border-t border-zinc-900">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-mono text-zinc-400 font-bold">Calculation Tape</span>
+        <button onclick="clearHistory()" class="text-[10px] text-rose-400 hover:underline cursor-pointer">Clear History</button>
+      </div>
+      <div id="history-list" class="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs font-mono">
+        <div class="text-zinc-600 italic text-[11px]">No calculations yet.</div>
+      </div>
+    </div>
+
+    <!-- Keyboard Support Footnote -->
+    <div class="mt-4 pt-3 border-t border-zinc-900/80 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+      <span>⌨️ Keyboard: 0-9, +, -, *, /, Enter, Esc</span>
+      <span class="text-cyan-400 font-semibold">100% Live Runner</span>
     </div>
   </div>
 
   <script>
-    let clicks = 0;
-    function incrementClicks() {
-      clicks++;
-      document.getElementById('counter-badge').innerText = 'Clicks: ' + clicks;
-      const fb = document.getElementById('click-feedback');
-      fb.classList.remove('hidden');
-      setTimeout(() => fb.classList.add('hidden'), 2000);
+    let currentExpr = '0';
+    let calcHistory = [];
+    let soundEnabled = true;
+    let audioCtx = null;
+    const disp = document.getElementById('calc-display');
+    const histLine = document.getElementById('calc-history-line');
+    const sciKeypad = document.getElementById('sci-keypad');
+    const modeBadge = document.getElementById('mode-badge');
+    const historyDrawer = document.getElementById('history-drawer');
+    const historyList = document.getElementById('history-list');
+
+    function playClickSound(freq = 750) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.05);
+      } catch(e) {}
     }
-    function resetClicks() {
-      clicks = 0;
-      document.getElementById('counter-badge').innerText = 'Clicks: 0';
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('sound-btn');
+      btn.innerText = soundEnabled ? '🔊' : '🔇';
+      btn.title = soundEnabled ? 'Sound ON' : 'Sound OFF';
     }
+
+    function toggleSciMode() {
+      playClickSound(900);
+      const isHidden = sciKeypad.classList.contains('hidden');
+      if (isHidden) {
+        sciKeypad.classList.remove('hidden');
+        modeBadge.innerText = 'SCI';
+        modeBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px]';
+      } else {
+        sciKeypad.classList.add('hidden');
+        modeBadge.innerText = 'STD';
+        modeBadge.className = 'px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono text-[10px]';
+      }
+    }
+
+    function toggleHistory() {
+      playClickSound(850);
+      historyDrawer.classList.toggle('hidden');
+    }
+
+    function setCalcTheme(theme) {
+      playClickSound(950);
+      const colors = {
+        cyan: { hex: '#00f0ff', tailwind: 'cyan' },
+        emerald: { hex: '#10b981', tailwind: 'emerald' },
+        purple: { hex: '#a855f7', tailwind: 'purple' },
+        rose: { hex: '#f43f5e', tailwind: 'rose' }
+      };
+      const selected = colors[theme] || colors.cyan;
+      disp.style.color = selected.hex;
+      disp.style.filter = 'drop-shadow(0 0 10px ' + selected.hex + '66)';
+      const equalBtn = document.querySelector('button[onclick="calcEqual()"]');
+      if (equalBtn) {
+        equalBtn.className = 'p-3 sm:p-3.5 bg-' + selected.tailwind + '-500 hover:bg-' + selected.tailwind + '-400 text-black font-extrabold rounded-xl flex items-center justify-center text-xl active:scale-95 transition shadow-lg cursor-pointer';
+      }
+    }
+
+    function calcNum(n) {
+      playClickSound(700 + Number(n) * 25);
+      if (currentExpr === '0' || currentExpr === 'Error') currentExpr = String(n);
+      else currentExpr += String(n);
+      disp.innerText = currentExpr;
+    }
+
+    function calcOp(op) {
+      playClickSound(620);
+      if ('+-*/'.includes(currentExpr.slice(-1))) currentExpr = currentExpr.slice(0, -1);
+      currentExpr += op;
+      disp.innerText = currentExpr;
+    }
+
+    function calcDot() {
+      playClickSound(650);
+      const parts = currentExpr.split(/[\+\-\*\/]/);
+      const lastPart = parts[parts.length - 1];
+      if (!lastPart.includes('.')) {
+        currentExpr += '.';
+        disp.innerText = currentExpr;
+      }
+    }
+
+    function clearCalc() {
+      playClickSound(500);
+      currentExpr = '0';
+      disp.innerText = '0';
+      histLine.innerText = '';
+    }
+
+    function delCalc() {
+      playClickSound(550);
+      if (currentExpr.length > 1 && currentExpr !== 'Error') {
+        currentExpr = currentExpr.slice(0, -1);
+      } else {
+        currentExpr = '0';
+      }
+      disp.innerText = currentExpr;
+    }
+
+    function calcSci(fn) {
+      playClickSound(800);
+      try {
+        const val = eval(currentExpr.replace(/×/g, '*').replace(/÷/g, '/')) || 0;
+        let res = 0;
+        switch(fn) {
+          case 'sin': res = Math.sin(val * (Math.PI / 180)); break;
+          case 'cos': res = Math.cos(val * (Math.PI / 180)); break;
+          case 'tan': res = Math.tan(val * (Math.PI / 180)); break;
+          case 'sqrt': res = Math.sqrt(val); break;
+          case 'sqr': res = Math.pow(val, 2); break;
+          case 'log': res = Math.log10(val); break;
+          case 'ln': res = Math.log(val); break;
+          case 'pi': currentExpr = String(Math.PI); disp.innerText = currentExpr; return;
+          case 'e': currentExpr = String(Math.E); disp.innerText = currentExpr; return;
+          case 'percent': res = val / 100; break;
+          case 'pow': currentExpr += '**'; disp.innerText = currentExpr; return;
+          case 'parenOpen': currentExpr = currentExpr === '0' ? '(' : currentExpr + '('; disp.innerText = currentExpr; return;
+          case 'parenClose': currentExpr += ')'; disp.innerText = currentExpr; return;
+          case 'inv': res = 1 / val; break;
+          case 'neg': res = -val; break;
+        }
+        histLine.innerText = fn + '(' + currentExpr + ') =';
+        currentExpr = String(Number(res.toFixed(8)));
+        disp.innerText = currentExpr;
+        addHistory(fn + '(' + val + ')', currentExpr);
+      } catch(e) {
+        disp.innerText = 'Error';
+        currentExpr = '0';
+      }
+    }
+
+    function calcEqual() {
+      playClickSound(1000);
+      try {
+        const raw = currentExpr;
+        const sanitized = currentExpr.replace(/×/g, '*').replace(/÷/g, '/');
+        const result = eval(sanitized);
+        const formatted = String(Number(result.toFixed(8)));
+        histLine.innerText = raw + ' =';
+        disp.innerText = formatted;
+        addHistory(raw, formatted);
+        currentExpr = formatted;
+      } catch(e) {
+        disp.innerText = 'Error';
+        currentExpr = '0';
+      }
+    }
+
+    function addHistory(expr, result) {
+      calcHistory.unshift({ expr, result, time: new Date().toLocaleTimeString() });
+      if (calcHistory.length > 20) calcHistory.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      if (calcHistory.length === 0) {
+        historyList.innerHTML = '<div class="text-zinc-600 italic text-[11px]">No calculations yet.</div>';
+        return;
+      }
+      historyList.innerHTML = calcHistory.map((item, idx) => \`
+        <div onclick="restoreHistory(\${idx})" class="p-2 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-900 flex items-center justify-between cursor-pointer transition">
+          <span class="text-zinc-400">\${item.expr} =</span>
+          <span class="text-cyan-400 font-bold">\${item.result}</span>
+        </div>
+      \`).join('');
+    }
+
+    function restoreHistory(idx) {
+      const item = calcHistory[idx];
+      if (item) {
+        playClickSound(880);
+        currentExpr = item.result;
+        disp.innerText = currentExpr;
+        histLine.innerText = 'Restored: ' + item.expr;
+      }
+    }
+
+    function clearHistory() {
+      calcHistory = [];
+      renderHistory();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key >= '0' && e.key <= '9') calcNum(e.key);
+      else if (['+', '-', '*', '/'].includes(e.key)) calcOp(e.key);
+      else if (e.key === 'Enter' || e.key === '=') calcEqual();
+      else if (e.key === 'Backspace') delCalc();
+      else if (e.key === 'Escape') clearCalc();
+      else if (e.key === '.') calcDot();
+    });
   </script>
 </body>
 </html>`;
+
+export const DEFAULT_TASK_CODE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMOLED Stealth Task Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #000000; }
+  </style>
+</head>
+<body class="bg-black text-zinc-100 min-h-screen p-4 sm:p-8 flex flex-col items-center justify-center selection:bg-cyan-500 selection:text-black">
+  <div class="max-w-md mx-auto w-full bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between pb-2 border-b border-zinc-900">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <h1 class="text-sm font-bold text-white uppercase tracking-wider">Stealth Task Matrix</h1>
+      </div>
+      <span id="task-counter" class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-mono">2 Tasks</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <input id="new-task-input" type="text" placeholder="Task ka naam likhein..." class="flex-1 bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-cyan-500 transition">
+      <button onclick="addTask()" class="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm rounded-xl transition cursor-pointer active:scale-95">+ Add</button>
+    </div>
+    <div id="tasks-list" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+      <div class="flex items-center justify-between p-3 rounded-xl bg-black border border-zinc-800 text-sm">
+        <span class="text-zinc-200">Terminal commands execution</span>
+        <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs font-mono">Done</span>
+      </div>
+      <div class="flex items-center justify-between p-3 rounded-xl bg-black border border-zinc-800 text-sm">
+        <span class="text-zinc-200">Live preview runner & real-time changes</span>
+        <span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-xs font-mono">Active</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    function updateCounter() {
+      const count = document.getElementById('tasks-list').children.length;
+      document.getElementById('task-counter').innerText = count + ' Tasks';
+    }
+    function addTask() {
+      const inp = document.getElementById('new-task-input');
+      const val = inp.value.trim();
+      if(!val) return;
+      const list = document.getElementById('tasks-list');
+      const item = document.createElement('div');
+      item.className = 'flex items-center justify-between p-3 rounded-xl bg-black border border-zinc-800 text-sm';
+      item.innerHTML = '<span class="text-zinc-200">' + val + '</span><button onclick="this.parentElement.remove(); updateCounter();" class="text-xs text-rose-400 hover:underline cursor-pointer">Remove</button>';
+      list.prepend(item);
+      inp.value = '';
+      updateCounter();
+    }
+    document.getElementById('new-task-input').addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') addTask();
+    });
+  </script>
+</body>
+</html>`;
+
+const DEFAULT_HALYE_CODE = DEFAULT_CALCULATOR_CODE;
 
 interface HalyeStudioProps {
   initialCode?: string;
@@ -133,8 +470,15 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [code, setCode] = useState<string>(initialCode || DEFAULT_HALYE_CODE);
   const [previewKey, setPreviewKey] = useState<number>(1);
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'vision' | 'code' | 'webeyes' | 'split'>('preview');
+  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes' | 'split'>('preview');
+  const [autoSelectWorkspaceFile, setAutoSelectWorkspaceFile] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Real-Time In-Preview Modifier State
+  const [realtimeInput, setRealtimeInput] = useState('');
+  const [isApplyingRealtime, setIsApplyingRealtime] = useState(false);
+  const [realtimeToast, setRealtimeToast] = useState<string | null>(null);
+  const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'sandbox'>('sandbox');
 
   // Web Eyes & Touch State
   const [webUrl, setWebUrl] = useState('https://news.ycombinator.com');
@@ -185,10 +529,151 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     { cmd: 'uname -a', out: 'Linux halye-container 6.6.137+ #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux', err: '', exit: 0, ms: 8 }
   ]);
 
-  // Initial Welcome Chat Message (Clean state)
-  const [conversation, setConversation] = useState<ChatMessage[]>([]);
+  // Multi-Session Chat Memory State (Isolated Per-Session History)
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const saved = localStorage.getItem('halye_sessions_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'session-main',
+        title: 'Session 1 (Main)',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: [],
+      }
+    ];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    try {
+      const savedId = localStorage.getItem('halye_active_session_id');
+      if (savedId) return savedId;
+    } catch (e) {}
+    return 'session-main';
+  });
+
+  const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitleText, setEditingTitleText] = useState('');
+  const [inspectingScreenshot, setInspectingScreenshot] = useState<AttachedFile | null>(null);
+  const [codeCopiedNotice, setCodeCopiedNotice] = useState<string | null>(null);
+
+  // Sync sessions to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('halye_sessions_v1', JSON.stringify(sessions));
+    } catch (e) {}
+  }, [sessions]);
+
+  // Sync activeSessionId to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('halye_active_session_id', activeSessionId);
+    } catch (e) {}
+  }, [activeSessionId]);
+
+  // Active Session & Derived Conversation
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0] || {
+    id: 'session-main',
+    title: 'Session 1',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messages: [],
+  };
+
+  const conversation: ChatMessage[] = activeSession.messages || [];
+
+  // Update conversation inside the active session
+  const setConversation = (updater: React.SetStateAction<ChatMessage[]>) => {
+    setSessions((prevSessions) => {
+      return prevSessions.map((s) => {
+        if (s.id === activeSession.id) {
+          const currentMsgs = s.messages || [];
+          const nextMsgs = typeof updater === 'function' ? updater(currentMsgs) : updater;
+          
+          let title = s.title;
+          if ((title.startsWith('Session ') || title === 'New Session') && nextMsgs.length > 0) {
+            const firstUser = nextMsgs.find((m) => m.role === 'user');
+            if (firstUser && (firstUser.text || firstUser.content)) {
+              const snippet = (firstUser.text || firstUser.content || '').trim();
+              if (snippet.length > 0) {
+                title = snippet.slice(0, 24) + (snippet.length > 24 ? '...' : '');
+              }
+            }
+          }
+
+          return {
+            ...s,
+            title,
+            messages: nextMsgs,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return s;
+      });
+    });
+  };
+
+  const handleCreateNewSession = () => {
+    const newId = 'session-' + Date.now();
+    const newNum = sessions.length + 1;
+    const newSession: ChatSession = {
+      id: newId,
+      title: `Session ${newNum}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    setSessions((prev) => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    setIsSessionDropdownOpen(false);
+  };
+
+  const handleDeleteSession = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSessions((prev) => {
+      const remaining = prev.filter((s) => s.id !== id);
+      if (remaining.length === 0) {
+        const fresh: ChatSession = {
+          id: 'session-' + Date.now(),
+          title: 'Session 1',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: [],
+        };
+        setActiveSessionId(fresh.id);
+        return [fresh];
+      }
+      if (activeSessionId === id) {
+        setActiveSessionId(remaining[0].id);
+      }
+      return remaining;
+    });
+  };
+
+  const handleClearCurrentChat = () => {
+    setConversation([]);
+  };
+
+  const handleSaveRenameSession = (id: string) => {
+    if (editingTitleText.trim()) {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: editingTitleText.trim() } : s))
+      );
+    }
+    setEditingSessionId(null);
+    setEditingTitleText('');
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
@@ -285,16 +770,18 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   };
 
   // Send Prompt to Halye Agent
-  const handleSendPrompt = async (forcedPrompt?: string) => {
+  const handleSendPrompt = async (forcedPrompt?: string, overrideFiles?: AttachedFile[]) => {
     const textToSend = forcedPrompt !== undefined ? forcedPrompt : prompt;
-    if ((!textToSend.trim() && stagedFiles.length === 0) || isGenerating) return;
+    const filesForThisMessage = overrideFiles && overrideFiles.length > 0 ? overrideFiles : [...stagedFiles];
+    if ((!textToSend.trim() && filesForThisMessage.length === 0) || isGenerating) return;
 
     const userMessageText = textToSend.trim();
-    const filesForThisMessage = [...stagedFiles];
 
     // Clear input & staged files
     setPrompt('');
-    setStagedFiles([]);
+    if (!overrideFiles) {
+      setStagedFiles([]);
+    }
 
     const userMessage: ChatMessage = {
       id: 'usr-' + Date.now(),
@@ -341,23 +828,52 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         setCode(data.code);
         setPreviewKey((k) => k + 1);
         setActivePane('preview');
+        setMobileActiveView('sandbox');
       }
 
       if (data.webInspection) {
         setWebInspectionData(data.webInspection);
       }
 
+      // Route pane autonomously
+      if (data.suggestedPane) {
+        setActivePane(data.suggestedPane);
+      } else if (data.terminalResult) {
+        setActivePane('terminal');
+      } else if (data.zipInspection || data.fileCreated) {
+        setActivePane('workspace');
+      } else if (data.powerBuilt) {
+        setActivePane('powers');
+      }
+
+      if (data.zipInspection) {
+        setAutoSelectWorkspaceFile(data.zipInspection.archive_name || 'demo_project.zip');
+      }
+      if (data.fileCreated) {
+        setAutoSelectWorkspaceFile(data.fileCreated.path);
+      }
+
       const assistantMessage: ChatMessage = {
         id: 'ast-' + Date.now(),
         role: 'assistant',
         text: data.text || 'Command processed.',
+        generatedCode: data.code || undefined,
         terminalResult: termResult,
         visionAnalysis: data.visionAnalysis,
         webInspection: data.webInspection,
+        zipInspection: data.zipInspection,
+        powerBuilt: data.powerBuilt,
+        fileCreated: data.fileCreated,
         timestamp: new Date().toLocaleTimeString(),
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
-        actionTaken: data.webInspection
+        actionTaken: data.zipInspection
+          ? `ZIP Archive Inspected: ${data.zipInspection.archive_name}`
+          : data.powerBuilt
+          ? `Autonomous Power Built: ${data.powerBuilt.name}`
+          : data.fileCreated
+          ? `Workspace File Created: ${data.fileCreated.name}`
+          : data.webInspection
           ? `Web Eyes Inspected: ${data.webInspection.title || data.webInspection.url}`
           : data.terminalResult
           ? `Terminal Command: ${data.terminalResult.command}`
@@ -409,7 +925,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         const eyeMessage: ChatMessage = {
           id: 'ast-eye-' + Date.now(),
           role: 'assistant',
-          text: `Jee Malik Halye! Maine apni ankhein (Web Eyes) kholi hain aur **${data.url}** (${data.title || 'Page'}) ko dekh liya hai. ${touchCount} interactive elements (buttons, inputs, links) detect kiye hain. Web Eyes & Touch tab mein inspection report hazir hai!`,
+          text: `Webpage **${data.url}** (${data.title || 'Page'}) inspect kar li hai. ${touchCount} interactive elements (buttons, inputs, links) detect kiye gaye hain. Report Web Eyes tab mein mojood hai.`,
           webInspection: data,
           timestamp: new Date().toLocaleTimeString(),
           actionTaken: `Web Eyes Inspected: ${data.title}`,
@@ -476,8 +992,123 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     setTimeout(() => setCopied(false), 1500);
   };
 
+  // Real-Time Hot Modifications
+  const applyClientRealtimeModification = (action: string) => {
+    let updated = code;
+    if (action === 'emerald') {
+      updated = updated.replace(/cyan-([0-9]{2,3})/g, 'emerald-$1')
+                       .replace(/#00f0ff/g, '#10b981')
+                       .replace(/rgba\(0,\s*240,\s*255/g, 'rgba(16, 185, 129');
+    } else if (action === 'violet') {
+      updated = updated.replace(/cyan-([0-9]{2,3})/g, 'purple-$1')
+                       .replace(/#00f0ff/g, '#a855f7')
+                       .replace(/rgba\(0,\s*240,\s*255/g, 'rgba(168, 85, 247');
+    } else if (action === 'rose') {
+      updated = updated.replace(/cyan-([0-9]{2,3})/g, 'rose-$1')
+                       .replace(/#00f0ff/g, '#f43f5e')
+                       .replace(/rgba\(0,\s*240,\s*255/g, 'rgba(244, 63, 94');
+    } else if (action === 'cyan') {
+      updated = updated.replace(/(?:emerald|purple|rose)-([0-9]{2,3})/g, 'cyan-$1')
+                       .replace(/(?:#10b981|#a855f7|#f43f5e)/g, '#00f0ff')
+                       .replace(/rgba\((?:16,\s*185,\s*129|168,\s*85,\s*247|244,\s*63,\s*94)/g, 'rgba(0, 240, 255');
+    } else if (action === 'toggle-sci') {
+      if (updated.includes('id="sci-keypad" class="hidden')) {
+        updated = updated.replace(/id="sci-keypad" class="hidden/g, 'id="sci-keypad" class="grid');
+      } else if (updated.includes('id="sci-keypad" class="grid')) {
+        updated = updated.replace(/id="sci-keypad" class="grid/g, 'id="sci-keypad" class="hidden');
+      }
+    } else if (action === 'toggle-history') {
+      if (updated.includes('id="history-drawer" class="hidden')) {
+        updated = updated.replace(/id="history-drawer" class="hidden/g, 'id="history-drawer" class="block');
+      } else if (updated.includes('id="history-drawer" class="block')) {
+        updated = updated.replace(/id="history-drawer" class="block/g, 'id="history-drawer" class="hidden');
+      }
+    }
+    setCode(updated);
+    setPreviewKey((k) => k + 1);
+    setRealtimeToast(`Applied: ${action}`);
+    setTimeout(() => setRealtimeToast(null), 3000);
+  };
+
+  const handleRealtimePromptSubmit = async (customPrompt?: string) => {
+    const textToApply = (customPrompt || realtimeInput).trim();
+    if (!textToApply || isApplyingRealtime) return;
+    setIsApplyingRealtime(true);
+    try {
+      const res = await fetch('/api/gemini/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: textToApply,
+          currentCode: code,
+          mode: 'builder',
+        }),
+      });
+      const data = await res.json();
+      if (data.code && data.code.includes('<')) {
+        setCode(data.code);
+        setPreviewKey((k) => k + 1);
+        setActivePane('preview');
+        setMobileActiveView('sandbox');
+        setRealtimeToast('✔ Live real-time update applied!');
+        setTimeout(() => setRealtimeToast(null), 3500);
+      }
+      setRealtimeInput('');
+    } catch (e) {
+      setRealtimeToast('Failed to apply real-time update');
+      setTimeout(() => setRealtimeToast(null), 3000);
+    } finally {
+      setIsApplyingRealtime(false);
+    }
+  };
+
+  const handleOpenStandalone = () => {
+    const blob = new Blob([code], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
+  const loadPresetApp = (preset: 'calc' | 'task') => {
+    if (preset === 'calc') {
+      setCode(DEFAULT_CALCULATOR_CODE);
+    } else {
+      setCode(DEFAULT_TASK_CODE);
+    }
+    setPreviewKey((k) => k + 1);
+    setActivePane('preview');
+    setMobileActiveView('sandbox');
+    setRealtimeToast(`Loaded ${preset === 'calc' ? 'Cyber Calculator' : 'Task Matrix'}`);
+    setTimeout(() => setRealtimeToast(null), 2500);
+  };
+
   return (
     <div id="halye-studio-root" className="w-full h-full flex flex-col lg:flex-row overflow-hidden bg-black text-zinc-100">
+      {/* Mobile Header Switcher (Chat vs Live Sandbox) */}
+      <div className="lg:hidden w-full flex items-center justify-around bg-black border-b border-zinc-900 p-2 z-20 shrink-0">
+        <button
+          onClick={() => setMobileActiveView('chat')}
+          className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobileActiveView === 'chat' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800 shadow' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Assistant Chat</span>
+        </button>
+        <button
+          onClick={() => {
+            setMobileActiveView('sandbox');
+            setActivePane('preview');
+          }}
+          className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobileActiveView === 'sandbox' ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/20' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <PlaySquare className="w-3.5 h-3.5" />
+          <span>Live Runner App</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        </button>
+      </div>
+
       {/* Hidden file input triggered by the '+' button */}
       <input
         type="file"
@@ -487,11 +1118,20 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         multiple
         className="hidden"
       />
+      {/* Hidden dedicated screenshot input */}
+      <input
+        type="file"
+        ref={screenshotInputRef}
+        onChange={handleFileSelect}
+        accept="image/*"
+        multiple
+        className="hidden"
+      />
 
       {/* ============================================================ */}
       {/* LEFT COLUMN: Autonomous Halye Assistant + Plus Icon Input    */}
       {/* ============================================================ */}
-      <div className="w-full lg:w-[480px] xl:w-[520px] h-full flex flex-col border-r border-zinc-900 bg-zinc-950/90 shrink-0 overflow-hidden">
+      <div className={`${mobileActiveView === 'chat' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[480px] xl:w-[520px] h-full flex-col border-r border-zinc-900 bg-zinc-950/90 shrink-0 overflow-hidden`}>
         
         {/* Agent Subheader Bar */}
         <div className="p-3 px-4 border-b border-zinc-900 bg-black flex items-center justify-between">
@@ -512,7 +1152,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             <button
               onClick={() => setShowModelCatalog(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-amber-500/30 text-[10px] font-mono transition cursor-pointer shadow-sm"
-              title="Click to switch to Hermes 4 70B Uncensored or test model response speed"
+              title="Click to switch model or test inference speed"
             >
               <span className={`w-1.5 h-1.5 rounded-full ${modelInfo?.status === 'online' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
               <span className="text-zinc-200 font-semibold truncate max-w-[140px]">
@@ -529,6 +1169,127 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               <span>Terminal</span>
             </button>
           </div>
+        </div>
+
+        {/* Per-Session Memory Control Bar */}
+        <div className="relative px-3.5 py-2 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between z-20">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              onClick={() => setIsSessionDropdownOpen(!isSessionDropdownOpen)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-zinc-200 transition cursor-pointer max-w-[180px]"
+              title="Switch or view saved sessions"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="truncate font-semibold text-[11px]">{activeSession.title}</span>
+              <ChevronDown className={`w-3 h-3 text-zinc-500 shrink-0 transition-transform ${isSessionDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {editingSessionId === activeSession.id ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={editingTitleText}
+                  onChange={(e) => setEditingTitleText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveRenameSession(activeSession.id);
+                    if (e.key === 'Escape') setEditingSessionId(null);
+                  }}
+                  className="px-2 py-0.5 rounded bg-black border border-cyan-500 text-[11px] text-white font-mono focus:outline-none w-28"
+                  autoFocus
+                />
+                <button
+                  onClick={() => handleSaveRenameSession(activeSession.id)}
+                  className="p-1 rounded bg-cyan-500 text-black hover:bg-cyan-400 transition"
+                  title="Save title"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditingSessionId(activeSession.id);
+                  setEditingTitleText(activeSession.title);
+                }}
+                className="p-1 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                title="Rename current session"
+              >
+                <Edit2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleCreateNewSession}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-cyan-400 hover:text-cyan-300 text-[10px] font-mono transition cursor-pointer shadow-sm"
+              title="Create new isolated session memory"
+            >
+              <Plus className="w-3 h-3" />
+              <span>New</span>
+            </button>
+
+            <button
+              onClick={handleClearCurrentChat}
+              className="p-1.5 rounded-lg bg-black hover:bg-zinc-900 text-zinc-400 hover:text-amber-400 border border-zinc-850 transition cursor-pointer"
+              title="Clear messages in this session"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+
+            <button
+              onClick={(e) => handleDeleteSession(activeSession.id, e)}
+              className="p-1.5 rounded-lg bg-black hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-850 transition cursor-pointer"
+              title="Delete this session"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Sessions Dropdown Menu */}
+          {isSessionDropdownOpen && (
+            <div className="absolute left-3.5 top-11 z-30 w-72 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl p-2 space-y-1">
+              <div className="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-zinc-500 border-b border-zinc-900">
+                <span>SAVED SESSIONS ({sessions.length})</span>
+                <button 
+                  onClick={handleCreateNewSession}
+                  className="text-cyan-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-2.5 h-2.5" /> New
+                </button>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-0.5 py-1">
+                {sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      setActiveSessionId(s.id);
+                      setIsSessionDropdownOpen(false);
+                    }}
+                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition ${
+                      s.id === activeSession.id
+                        ? 'bg-cyan-500/10 border border-cyan-500/30 text-white font-semibold'
+                        : 'hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className="truncate flex-1 pr-2">
+                      <div className="truncate text-[11px]">{s.title}</div>
+                      <div className="text-[9px] text-zinc-600 font-mono">
+                        {s.messages?.length || 0} messages • {new Date(s.updatedAt || s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteSession(s.id, e)}
+                      className="p-1 text-zinc-600 hover:text-rose-400 rounded transition cursor-pointer"
+                      title="Delete session"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Conversation Stream */}
@@ -551,8 +1312,20 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           {conversation.map((msg) => (
             <div
               key={msg.id}
-              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+              className={`flex flex-col group relative ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
+              {/* Individual Message Delete Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setConversation((prev) => prev.filter((m) => m.id !== msg.id));
+                }}
+                className={`absolute -top-2 ${msg.role === 'user' ? '-left-6' : '-right-6'} opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-rose-400 rounded transition cursor-pointer z-10`}
+                title="Delete this message"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+
               <div
                 className={`max-w-[92%] rounded-2xl p-3.5 shadow-lg leading-relaxed ${
                   msg.role === 'user'
@@ -569,11 +1342,21 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 p-1.5 flex items-center gap-2 max-w-full"
                       >
                         {file.type === 'screenshot' && file.dataUrl ? (
-                          <img
-                            src={file.dataUrl}
-                            alt={file.name}
-                            className="w-16 h-12 object-cover rounded-lg border border-zinc-800"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setInspectingScreenshot(file)}
+                            className="relative group/thumb cursor-pointer overflow-hidden rounded-lg shrink-0"
+                            title="Click to inspect screenshot in full resolution"
+                          >
+                            <img
+                              src={file.dataUrl}
+                              alt={file.name}
+                              className="w-16 h-12 object-cover rounded-lg border border-zinc-800 group-hover/thumb:border-cyan-500 transition"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center rounded-lg transition">
+                              <Eye className="w-4 h-4 text-cyan-400" />
+                            </div>
+                          </button>
                         ) : (
                           <FileText className="w-5 h-5 text-cyan-400 ml-1" />
                         )}
@@ -729,6 +1512,130 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* ZIP Archive Inspection Card */}
+                {msg.zipInspection && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-amber-500/40 p-3 space-y-2.5 font-mono text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                        <Archive className="w-3.5 h-3.5" />
+                        ZIP: {msg.zipInspection.archive_name}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setAutoSelectWorkspaceFile(msg.zipInspection?.archive_name || null);
+                          setActivePane('workspace');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[10px] transition cursor-pointer active:scale-95 shadow"
+                      >
+                        Inspect in Workspace
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-[10px] text-zinc-400">
+                      <span className="text-zinc-200 font-semibold">{msg.zipInspection.total_files} Files inside</span>
+                      <span>•</span>
+                      <span>Total: {msg.zipInspection.total_size_formatted}</span>
+                    </div>
+
+                    {msg.zipInspection.files && msg.zipInspection.files.length > 0 && (
+                      <div className="max-h-32 overflow-y-auto space-y-1 bg-black/80 p-2 rounded-lg text-[10px] border border-zinc-900">
+                        {msg.zipInspection.files.slice(0, 6).map((zf, zi) => (
+                          <div key={zi} className="flex items-center justify-between py-0.5 border-b border-zinc-900/50 last:border-0">
+                            <span className="text-zinc-300 truncate max-w-[200px]">{zf.filename}</span>
+                            <span className="text-zinc-500 font-mono">{(zf.file_size / 1024).toFixed(1)} KB</span>
+                          </div>
+                        ))}
+                        {msg.zipInspection.files.length > 6 && (
+                          <div className="text-zinc-500 text-[9px] pt-1 italic">
+                            + {msg.zipInspection.files.length - 6} more archive items...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Autonomous Power Built Card */}
+                {msg.powerBuilt && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2 font-mono text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                        <Zap className="w-3.5 h-3.5" />
+                        Power Built: {msg.powerBuilt.name}
+                      </span>
+                      <button
+                        onClick={() => setActivePane('powers')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[10px] transition cursor-pointer active:scale-95 shadow"
+                      >
+                        Open Powers Suite
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 leading-relaxed">{msg.powerBuilt.description}</p>
+                  </div>
+                )}
+
+                {/* Workspace File Created Card */}
+                {msg.fileCreated && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/40 p-3 space-y-2 font-mono text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
+                        <FileText className="w-3.5 h-3.5" />
+                        File: {msg.fileCreated.name}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setAutoSelectWorkspaceFile(msg.fileCreated?.path || null);
+                          setActivePane('workspace');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[10px] transition cursor-pointer active:scale-95 shadow"
+                      >
+                        Open in Workspace
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated or Extracted Code Card */}
+                {msg.generatedCode && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/30 overflow-hidden font-mono text-[11px]">
+                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-zinc-300">
+                      <span className="flex items-center gap-1.5 text-cyan-400 font-bold text-[10px]">
+                        <Code2 className="w-3.5 h-3.5" />
+                        Generated AMOLED Code
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.generatedCode || '');
+                            setCodeCopiedNotice(msg.id);
+                            setTimeout(() => setCodeCopiedNotice(null), 3000);
+                          }}
+                          className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-750 text-zinc-200 text-[10px] transition cursor-pointer"
+                        >
+                          {codeCopiedNotice === msg.id ? '✔ Copied' : 'Copy Code'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (msg.generatedCode) {
+                              setCode(msg.generatedCode);
+                              setPreviewKey((k) => k + 1);
+                              setActivePane('preview');
+                              setMobileActiveView('sandbox');
+                            }
+                          }}
+                          className="px-2.5 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[10px] transition cursor-pointer active:scale-95 shadow flex items-center gap-1"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Run Live in Preview</span>
+                        </button>
+                      </div>
+                    </div>
+                    <pre className="p-3 bg-black/90 text-zinc-300 max-h-48 overflow-y-auto text-[10px] whitespace-pre-wrap leading-relaxed">
+                      {msg.generatedCode.slice(0, 450)}...
+                    </pre>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -753,7 +1660,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black border border-zinc-800 text-[11px] text-zinc-200 shrink-0"
               >
                 {f.type === 'screenshot' && f.dataUrl ? (
-                  <img src={f.dataUrl} alt="thumbnail" className="w-4 h-4 object-cover rounded" />
+                  <button
+                    type="button"
+                    onClick={() => setInspectingScreenshot(f)}
+                    className="cursor-pointer"
+                    title="Inspect screenshot"
+                  >
+                    <img src={f.dataUrl} alt="thumbnail" className="w-4 h-4 object-cover rounded hover:opacity-80 transition" />
+                  </button>
                 ) : (
                   <FileText className="w-3.5 h-3.5 text-cyan-400" />
                 )}
@@ -768,6 +1682,46 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             ))}
           </div>
         )}
+
+        {/* Quick Developer Action Chips */}
+        <div className="px-3 pt-2 bg-black border-t border-zinc-900/80 flex items-center gap-1.5 overflow-x-auto text-[11px] font-mono select-none">
+          <button
+            type="button"
+            onClick={() => screenshotInputRef.current?.click()}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-400 border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
+            title="Upload screenshot for vision perception"
+          >
+            <ImageIcon className="w-3 h-3" />
+            <span>+ Screenshot</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSendPrompt("Is code ko thoroughly explain karo: architecture, components, data flow aur logic samjhao.")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
+          >
+            <Code2 className="w-3 h-3 text-emerald-400" />
+            <span>Explain Code</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSendPrompt("Current code aur recent execution logs me errors check karo, bugs diagnose karo aur fix provide karo.")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
+          >
+            <AlertCircle className="w-3 h-3 text-amber-400" />
+            <span>Debug & Fix</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSendPrompt("Is task ya webpage ke liye complete standalone modern HTML + Tailwind CSS web application Pitch Black AMOLED (#000000) theme me likho.")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
+          >
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <span>AMOLED App</span>
+          </button>
+        </div>
 
         {/* Unified Input Bar with PLUS (+) Icon */}
         <div className="p-3 border-t border-zinc-900 bg-black flex items-end gap-2">
@@ -794,7 +1748,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               }
             }}
             onPaste={handlePaste}
-            placeholder="Halye Assistant ko hukum karein... (Press + to attach image)"
+            placeholder="Ask coding question, command, or paste screenshot (Ctrl+V)..."
             rows={2}
             className="flex-1 bg-zinc-950 border border-zinc-850 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-cyan-500 resize-none font-sans leading-relaxed transition"
           />
@@ -823,7 +1777,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       {/* ============================================================ */}
       {/* RIGHT COLUMN: Multi-Mode Live Sandbox & Visualizer           */}
       {/* ============================================================ */}
-      <div className="flex-1 h-full flex flex-col overflow-hidden bg-black">
+      <div className={`${mobileActiveView === 'sandbox' ? 'flex' : 'hidden'} lg:flex flex-1 h-full flex-col overflow-hidden bg-black`}>
         
         {/* Workspace Mode Tabs & Controls Header */}
         <div className="h-12 border-b border-zinc-900 bg-zinc-950/80 px-4 flex items-center justify-between shrink-0">
@@ -850,6 +1804,28 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             >
               <Terminal className="w-3.5 h-3.5 text-emerald-400" />
               <span>Interactive Terminal</span>
+            </button>
+
+            <button
+              id="tab-workspace-btn"
+              onClick={() => setActivePane('workspace')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'workspace' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <FolderTree className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Files & Workspace</span>
+            </button>
+
+            <button
+              id="tab-powers-btn"
+              onClick={() => setActivePane('powers')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'powers' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>⚡ Halye Powers</span>
             </button>
 
             <button
@@ -944,25 +1920,144 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
           {/* 1. LIVE WEB APPLICATION PREVIEW */}
           {activePane === 'preview' && (
-            <div className="w-full h-full flex flex-col items-center justify-center p-3 sm:p-5 bg-black overflow-hidden">
-              <div
-                className={`h-full w-full rounded-2xl overflow-hidden bg-black border border-zinc-850 shadow-2xl transition-all duration-300 flex flex-col ${
-                  viewport === 'tablet'
-                    ? 'max-w-[768px] border-zinc-800'
-                    : viewport === 'mobile'
-                    ? 'max-w-[390px] border-zinc-800'
-                    : 'w-full'
-                }`}
-              >
-                <iframe
-                  ref={iframeRef}
-                  key={previewKey}
-                  id="live-app-preview-iframe"
-                  srcDoc={code}
-                  title="Halye Live Web App"
-                  sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-                  className="w-full h-full border-0 bg-black"
-                />
+            <div className="w-full h-full flex flex-col p-2 sm:p-4 bg-black overflow-hidden">
+              {/* Real-time Artifact Status & Preset Bar */}
+              <div className="mb-2 p-2 sm:px-3 bg-zinc-950 border border-zinc-850 rounded-xl flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-xs font-bold text-white tracking-wide">Live Sandbox</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono font-semibold border border-cyan-500/30">
+                    Real-time Hot-Reload
+                  </span>
+                </div>
+
+                {/* Preset Switchers */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500 font-mono mr-1 hidden sm:inline">Presets:</span>
+                  <button
+                    onClick={() => loadPresetApp('calc')}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white text-[11px] font-bold border border-zinc-800 transition cursor-pointer flex items-center gap-1 active:scale-95"
+                    title="Load AMOLED Cyber Matrix Calculator"
+                  >
+                    <span>🧮 Calculator</span>
+                  </button>
+                  <button
+                    onClick={() => loadPresetApp('task')}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-emerald-400 hover:text-white text-[11px] font-bold border border-zinc-800 transition cursor-pointer flex items-center gap-1 active:scale-95"
+                    title="Load AMOLED Task Matrix"
+                  >
+                    <span>⚡ Task Matrix</span>
+                  </button>
+                  <button
+                    onClick={handleOpenStandalone}
+                    className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-400 border border-zinc-800 transition cursor-pointer ml-1"
+                    title="Open Live App in Standalone Tab"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-Time Hot-Modification Bar */}
+              <div className="mb-2 p-2 bg-black border border-zinc-850 rounded-xl flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                  <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider mr-1 shrink-0">Quick Powers:</span>
+                  <button
+                    onClick={() => applyClientRealtimeModification('toggle-sci')}
+                    className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-cyan-300 border border-zinc-800 text-[10px] font-mono font-bold transition cursor-pointer shrink-0 active:scale-95"
+                    title="Toggle Scientific Calculator keypad in real-time"
+                  >
+                    ⚡ Sci Mode
+                  </button>
+                  <button
+                    onClick={() => applyClientRealtimeModification('toggle-history')}
+                    className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[10px] font-mono transition cursor-pointer shrink-0 active:scale-95"
+                    title="Toggle Calculation Tape history in real-time"
+                  >
+                    📜 History
+                  </button>
+                  <div className="h-3 w-px bg-zinc-800 mx-1 shrink-0" />
+                  <span className="text-[10px] text-zinc-500 font-mono shrink-0">Live Color:</span>
+                  <button
+                    onClick={() => applyClientRealtimeModification('emerald')}
+                    className="w-4 h-4 rounded-full bg-emerald-400 hover:scale-125 transition cursor-pointer ring-1 ring-emerald-500/50 shrink-0"
+                    title="Real-time Emerald Theme"
+                  />
+                  <button
+                    onClick={() => applyClientRealtimeModification('violet')}
+                    className="w-4 h-4 rounded-full bg-purple-400 hover:scale-125 transition cursor-pointer ring-1 ring-purple-500/50 shrink-0"
+                    title="Real-time Violet Theme"
+                  />
+                  <button
+                    onClick={() => applyClientRealtimeModification('rose')}
+                    className="w-4 h-4 rounded-full bg-rose-400 hover:scale-125 transition cursor-pointer ring-1 ring-rose-500/50 shrink-0"
+                    title="Real-time Rose Theme"
+                  />
+                  <button
+                    onClick={() => applyClientRealtimeModification('cyan')}
+                    className="w-4 h-4 rounded-full bg-cyan-400 hover:scale-125 transition cursor-pointer ring-1 ring-cyan-500/50 shrink-0"
+                    title="Real-time Cyan Theme"
+                  />
+                </div>
+
+                {/* Instant Real-Time Prompt Editor */}
+                <div className="flex-1 min-w-[260px] flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={realtimeInput}
+                      onChange={(e) => setRealtimeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRealtimePromptSubmit();
+                      }}
+                      placeholder="Prompt real-time changes (e.g. 'Add tax button', 'Make borders emerald')..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500 transition font-sans"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleRealtimePromptSubmit()}
+                    disabled={isApplyingRealtime || !realtimeInput.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-extrabold text-xs transition cursor-pointer flex items-center gap-1 shrink-0 active:scale-95 shadow-sm"
+                  >
+                    {isApplyingRealtime ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 fill-current" />
+                    )}
+                    <span>Apply Live</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Toast Feedback */}
+              {realtimeToast && (
+                <div className="mb-2 px-3 py-1 bg-emerald-950/60 border border-emerald-500/50 rounded-lg text-emerald-400 text-xs font-mono flex items-center gap-2 shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{realtimeToast}</span>
+                </div>
+              )}
+
+              {/* Actual Running Sandboxed iFrame */}
+              <div className="flex-1 w-full flex items-center justify-center overflow-hidden min-h-0">
+                <div
+                  className={`h-full w-full rounded-2xl overflow-hidden bg-black border border-zinc-850 shadow-2xl transition-all duration-300 flex flex-col ${
+                    viewport === 'tablet'
+                      ? 'max-w-[768px] border-zinc-800'
+                      : viewport === 'mobile'
+                      ? 'max-w-[390px] border-zinc-800'
+                      : 'w-full'
+                  }`}
+                >
+                  <iframe
+                    ref={iframeRef}
+                    key={previewKey}
+                    id="live-app-preview-iframe"
+                    srcDoc={code}
+                    title="Halye Live Web App"
+                    sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
+                    className="w-full h-full border-0 bg-black"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -1326,7 +2421,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                             webInspectionData.touchable_elements.buttons.map((btn, i) => (
                               <button
                                 key={i}
-                                onClick={() => handleSendPrompt(`Malik Halye hukum: is webpage ka button "${btn.text}" touch/execute karo.`)}
+                                onClick={() => handleSendPrompt(`Is webpage ka button "${btn.text}" touch/execute karo.`)}
                                 className="w-full text-left p-2 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-emerald-300 flex items-center justify-between transition cursor-pointer"
                               >
                                 <span className="truncate">{btn.text || 'Button'}</span>
@@ -1395,7 +2490,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                       </p>
                       <button
                         onClick={() => {
-                          handleSendPrompt(`Jee Malik Halye, please reconstruct this inspected webpage (${webInspectionData.url} - ${webInspectionData.title}) as a modern Pitch Black AMOLED web application.`);
+                          handleSendPrompt(`Please reconstruct this inspected webpage (${webInspectionData.url} - ${webInspectionData.title}) as a modern Pitch Black AMOLED web application.`);
                         }}
                         className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95"
                       >
@@ -1427,6 +2522,31 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               )}
             </div>
           )}
+
+          {/* Files & Workspace Pane */}
+          {activePane === 'workspace' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-black">
+              <WorkspaceExplorer
+                autoSelectFile={autoSelectWorkspaceFile}
+                onRunInTerminal={(cmd) => {
+                  setActivePane('terminal');
+                  handleRunTerminalCommand(cmd);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Halye Powers Suite Pane */}
+          {activePane === 'powers' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-black">
+              <PowersSuite
+                onRunInTerminal={(cmd) => {
+                  setActivePane('terminal');
+                  handleRunTerminalCommand(cmd);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1439,6 +2559,17 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           setModelInfo((prev) => prev ? { ...prev, activeModel: modelId, provider } : null);
         }}
       />
+
+      {/* Screenshot Full-Resolution Vision Perception Modal */}
+      {inspectingScreenshot && (
+        <ScreenshotModal
+          file={inspectingScreenshot}
+          onClose={() => setInspectingScreenshot(null)}
+          onAction={(actionPrompt) => {
+            handleSendPrompt(actionPrompt, [inspectingScreenshot]);
+          }}
+        />
+      )}
     </div>
   );
 };

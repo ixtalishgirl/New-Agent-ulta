@@ -126,7 +126,7 @@ export const NvidiaCatalogModal: React.FC<NvidiaCatalogModalProps> = ({
       const data = await res.json();
       if (data.success) {
         setSelectedModel(modelItem.id);
-        setSwitchNotice(`✔ Malik Halye, active model foran switch ho gaya hai: ${modelItem.name}`);
+        setSwitchNotice(`✔ Active model switch ho gaya hai: ${modelItem.name}`);
         if (onModelSwitched) {
           onModelSwitched(modelItem.id, provider);
         }
@@ -326,7 +326,7 @@ export const NvidiaCatalogModal: React.FC<NvidiaCatalogModalProps> = ({
               <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4 text-red-400" />
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Uncensored Hermes Frontier (Malik Halye's Preferred Models)
+                  Uncensored Frontier Models
                 </h4>
               </div>
               <span className="text-[10px] font-mono text-zinc-500">100% Obedient & Zero Refusal</span>

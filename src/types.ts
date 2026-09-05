@@ -54,10 +54,68 @@ export interface ChatMessage {
   terminalResult?: TerminalExecutionResult;
   visionAnalysis?: VisionAnalysisResult;
   webInspection?: WebInspectionResult;
+  zipInspection?: ZipInspectionResult;
+  powerBuilt?: HalyePowerItem;
+  fileCreated?: { path: string; name: string; size: number };
+  suggestedPane?: 'preview' | 'terminal' | 'workspace' | 'powers' | 'webeyes' | 'vision' | 'code';
   generatedCode?: string;
   model?: string;
   provider?: string;
   actionTaken?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+  codeSnapshot?: string;
+  model?: string;
+}
+
+export interface WorkspaceFileItem {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  sizeFormatted: string;
+  extension: string;
+  isZip: boolean;
+  mtime: string;
+}
+
+export interface ZipEntry {
+  filename: string;
+  is_dir: boolean;
+  file_size: number;
+  compress_size: number;
+  compression_ratio: string;
+  date_time: string;
+}
+
+export interface ZipInspectionResult {
+  success: boolean;
+  archive_name: string;
+  archive_path: string;
+  total_files: number;
+  total_uncompressed_bytes: number;
+  total_compressed_bytes: number;
+  total_size_formatted: string;
+  files: ZipEntry[];
+  error?: string;
+}
+
+export interface HalyePowerItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  command: string;
+  status: 'active' | 'inactive';
+  version: string;
+  invocations: number;
+  createdAt: string;
 }
 
 export interface NvidiaModelCatalogItem {
