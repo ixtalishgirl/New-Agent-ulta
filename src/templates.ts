@@ -8,7 +8,7 @@ export const BLANK_CANVAS_CODE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halye Studio — Blank Workspace</title>
+  <title>Halye Autonomous Web Canvas</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
@@ -18,44 +18,44 @@ export const BLANK_CANVAS_CODE = `<!DOCTYPE html>
 </head>
 <body class="bg-black text-zinc-100 min-h-screen p-6 sm:p-12 flex flex-col items-center justify-center selection:bg-cyan-500 selection:text-black">
   <div class="max-w-xl mx-auto w-full text-center space-y-6">
-    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-400">
-      <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-      <span>CANVAS CLEARED & READY</span>
+    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span>AUTONOMOUS LIVE RUNNER ACTIVE</span>
     </div>
 
     <div class="space-y-3">
       <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-        Clean Workspace Canvas
+        Live Autonomous Web Canvas
       </h1>
       <p class="text-zinc-400 text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
-        Previous code cleared. Ready to build an ultra-realistic website, thousands of lines of raw code, or full Vercel-ready web applications.
+        Sirf wohi websites aur apps yahan live execute hongi jo Halye AI agent autonomously build karega. Assistant Chat mein prompt dein aur live preview yahin real-time run hoga.
       </p>
     </div>
 
-    <div class="p-6 rounded-3xl bg-zinc-950 border border-zinc-850 shadow-2xl text-left space-y-4">
-      <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Quick Start Options:</div>
-      
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button onclick="parent.postMessage({ type: 'LOAD_PRESET', preset: 'saas' }, '*')" class="p-4 rounded-2xl bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-cyan-500/50 text-left transition group cursor-pointer">
-          <div class="text-base font-bold text-white group-hover:text-cyan-400 transition flex items-center justify-between">
-            <span>🌐 Ultra-Realistic Web</span>
-            <span class="text-xs text-zinc-500 font-mono font-normal">SaaS App</span>
-          </div>
-          <p class="text-xs text-zinc-400 mt-1.5">Multi-section production web app with navbar, pricing, lead forms, and Vercel readiness.</p>
-        </button>
-
-        <button onclick="parent.postMessage({ type: 'LOAD_PRESET', preset: 'task' }, '*')" class="p-4 rounded-2xl bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-left transition group cursor-pointer">
-          <div class="text-base font-bold text-white group-hover:text-emerald-400 transition flex items-center justify-between">
-            <span>⚡ Task Matrix</span>
-            <span class="text-xs text-zinc-500 font-mono font-normal">Tool</span>
-          </div>
-          <p class="text-xs text-zinc-400 mt-1.5">Stealth state management with local persistence, counter, and fast actions.</p>
-        </button>
+    <div class="p-6 rounded-3xl bg-zinc-950 border border-zinc-850 shadow-2xl text-left space-y-3">
+      <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+        <span>Autonomous Runtime Pipeline</span>
+        <span class="text-emerald-400">● 100% Operational</span>
       </div>
 
-      <div class="pt-3 border-t border-zinc-900 flex items-center justify-between text-xs text-zinc-500 font-mono">
-        <span>💡 Ask Halye in chat to build any custom website, app, or dashboard.</span>
-        <span class="text-cyan-400">Halye Live Web Engine</span>
+      <div class="space-y-2 text-xs font-mono text-zinc-400">
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-black border border-zinc-900">
+          <span class="text-zinc-300">⚡ Code Synthesis & Execution</span>
+          <span class="text-cyan-400">Instant Hot-Reload</span>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-black border border-zinc-900">
+          <span class="text-zinc-300">💉 Self-Healing Error Middleware</span>
+          <span class="text-emerald-400">Auto-Fix Enabled</span>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-black border border-zinc-900">
+          <span class="text-zinc-300">🐚 Terminal & Powers Subsystems</span>
+          <span class="text-purple-400">Integrated</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-zinc-900 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+        <span>Type prompt in chat: "Build a website / app for..."</span>
+        <span class="text-cyan-400">Halye Live Engine</span>
       </div>
     </div>
   </div>
