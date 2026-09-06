@@ -69,6 +69,7 @@ export interface ChatMessage {
   actionTaken?: string;
   pipeline?: AgenticSquadPipeline;
   toolCalls?: AgentToolCall[];
+  dialogue?: InterAgentMessage[];
 }
 
 export interface ChatSession {
@@ -142,6 +143,19 @@ export interface AgentToolCall {
   correctedWith?: string;
 }
 
+export interface InterAgentMessage {
+  agentId: string;
+  name: string;
+  role: string;
+  avatar: string;
+  color: string;
+  targetAgent: string;
+  speech: string;
+  toolExecuted?: string;
+  toolOutput?: string;
+  timestamp?: string;
+}
+
 export interface AgenticSquadPipeline {
   orchestrator: {
     model: string; // google/gemma-4-31b-it
@@ -170,6 +184,7 @@ export interface AgenticSquadPipeline {
     passedReview: boolean;
     fixesApplied: string[];
   };
+  dialogue?: InterAgentMessage[];
 }
 
 export interface NvidiaModelCatalogItem {

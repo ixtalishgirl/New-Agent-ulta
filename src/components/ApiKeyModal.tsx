@@ -29,14 +29,18 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   onKeysUpdated,
 }) => {
   const [nvidiaKey, setNvidiaKey] = useState('');
+  const [gemmaKey, setGemmaKey] = useState('');
+  const [lagunaKey, setLagunaKey] = useState('');
+  const [deepseekKey, setDeepseekKey] = useState('');
+  const [minimaxKey, setMinimaxKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
-  const [openrouterKey, setOpenrouterKey] = useState('');
-  const [groqKey, setGroqKey] = useState('');
 
   const [showNvidia, setShowNvidia] = useState(false);
+  const [showGemma, setShowGemma] = useState(false);
+  const [showLaguna, setShowLaguna] = useState(false);
+  const [showDeepseek, setShowDeepseek] = useState(false);
+  const [showMinimax, setShowMinimax] = useState(false);
   const [showGemini, setShowGemini] = useState(false);
-  const [showOpenrouter, setShowOpenrouter] = useState(false);
-  const [showGroq, setShowGroq] = useState(false);
 
   const [configuredStatus, setConfiguredStatus] = useState<Record<string, { configured: boolean; masked: string | null }>>({});
   const [saving, setSaving] = useState(false);
@@ -70,9 +74,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nvidiaKey: nvidiaKey.trim() || undefined,
+          gemmaKey: gemmaKey.trim() || undefined,
+          lagunaKey: lagunaKey.trim() || undefined,
+          deepseekKey: deepseekKey.trim() || undefined,
+          minimaxKey: minimaxKey.trim() || undefined,
           geminiKey: geminiKey.trim() || undefined,
-          openrouterKey: openrouterKey.trim() || undefined,
-          groqKey: groqKey.trim() || undefined,
         }),
       });
 
@@ -97,17 +103,27 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   const generateEnvContent = () => {
     const n = nvidiaKey.trim() || (configuredStatus.nvidia?.configured ? 'configured_in_environment' : '');
+    const gm = gemmaKey.trim() || (configuredStatus.gemma?.configured ? 'configured_in_environment' : '');
+    const lg = lagunaKey.trim() || (configuredStatus.laguna?.configured ? 'configured_in_environment' : '');
+    const ds = deepseekKey.trim() || (configuredStatus.deepseek?.configured ? 'configured_in_environment' : '');
+    const mm = minimaxKey.trim() || (configuredStatus.minimax?.configured ? 'configured_in_environment' : '');
     const g = geminiKey.trim() || (configuredStatus.gemini?.configured ? 'configured_in_environment' : '');
-    const o = openrouterKey.trim() || (configuredStatus.openrouter?.configured ? 'configured_in_environment' : '');
-    const q = groqKey.trim() || (configuredStatus.groq?.configured ? 'configured_in_environment' : '');
 
     return `# Halye AI Assistant & 4-Core Models Secrets
 # Add these variables to your GitHub Repository Secrets or .env file
 
+# Master NVIDIA NIM API Key (Powers all 4 Models simultaneously)
 NVIDIA_API_KEY=${n || 'your_nvidia_api_key_here'}
-GEMINI_API_KEY=${g || 'your_gemini_api_key_here'}
-OPENROUTER_API_KEY=${o || 'your_openrouter_api_key_here'}
-GROQ_API_KEY=${q || 'your_groq_api_key_here'}
+
+# Individual Model API Keys
+GEMMA_API_KEY=${gm || ''}
+LAGUNA_API_KEY=${lg || ''}
+DEEPSEEK_API_KEY=${ds || ''}
+MINIMAX_API_KEY=${mm || ''}
+
+# Google AI Studio Fallback Key
+GEMINI_API_KEY=${g || ''}
+
 NVIDIA_MODEL=squad-ensemble
 PORT=3000
 NODE_ENV=production`;
@@ -215,47 +231,47 @@ NODE_ENV=production`;
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
                   <div className="p-2 rounded-lg bg-black border border-zinc-800">
-                    <div className="text-amber-400 font-bold flex items-center gap-1 text-[10px]">
-                      <span>🧠</span> Model 1
+                    <div className="text-cyan-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>💎</span> Model 1
                     </div>
-                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Llama 3.3 70B</div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Gemma 4 (31B)</div>
                     <div className="text-zinc-500 text-[9px]">Lead Orchestrator</div>
                   </div>
                   <div className="p-2 rounded-lg bg-black border border-zinc-800">
                     <div className="text-emerald-400 font-bold flex items-center gap-1 text-[10px]">
-                      <span>💻</span> Model 2
+                      <span>⚡</span> Model 2
                     </div>
-                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Qwen 2.5 Coder</div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Laguna XS (33B)</div>
                     <div className="text-zinc-500 text-[9px]">Terminal Master</div>
                   </div>
                   <div className="p-2 rounded-lg bg-black border border-zinc-800">
-                    <div className="text-blue-400 font-bold flex items-center gap-1 text-[10px]">
-                      <span>📐</span> Model 3
+                    <div className="text-indigo-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>🧠</span> Model 3
                     </div>
-                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">DeepSeek R1</div>
-                    <div className="text-zinc-500 text-[9px]">Deep Logic</div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">DeepSeek V4</div>
+                    <div className="text-zinc-500 text-[9px]">Deep Logic & Code</div>
                   </div>
                   <div className="p-2 rounded-lg bg-black border border-zinc-800">
-                    <div className="text-purple-400 font-bold flex items-center gap-1 text-[10px]">
-                      <span>⚡</span> Model 4
+                    <div className="text-fuchsia-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>👁️</span> Model 4
                     </div>
-                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Mixtral 8x22B</div>
-                    <div className="text-zinc-500 text-[9px]">UI Reviewer</div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">MiniMax M3</div>
+                    <div className="text-zinc-500 text-[9px]">UI Reviewer & QA</div>
                   </div>
                 </div>
 
                 <p className="text-zinc-400 text-[11px] leading-relaxed">
-                  💡 <strong>Tip:</strong> Sirf <strong>1 NVIDIA NIM API Key (<code className="text-cyan-300">nvapi-...</code>)</strong> in chaaron (4) models ko ek sath live connect kar deti hai! (Free credits from <em>build.nvidia.com</em>). Aap Google Gemini, Groq ya OpenRouter key bhi use kar sakte hain.
+                  💡 <strong>Tip:</strong> Aap chaaron models ke liye alag alag API keys enter kar sakte hain, ya sirf <strong>1 Master NVIDIA NIM API Key (<code className="text-cyan-300">nvapi-...</code>)</strong> se in sabhi ko ek sath live connect kar sakte hain (Free credits at <em>build.nvidia.com</em>).
                 </p>
               </div>
 
-              {/* 1. NVIDIA Key */}
-              <div className="space-y-1.5">
+              {/* Master NVIDIA Key */}
+              <div className="space-y-1.5 p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/40">
                 <div className="flex items-center justify-between text-xs">
-                  <label className="font-bold text-zinc-200 flex items-center gap-1.5">
-                    <span>NVIDIA NIM API Key</span>
-                    <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-900/60">
-                      Required for 4-Model Squad
+                  <label className="font-bold text-white flex items-center gap-1.5">
+                    <span>🌐 Master NVIDIA NIM API Key</span>
+                    <span className="text-[10px] text-cyan-300 font-mono bg-cyan-900/60 px-1.5 py-0.2 rounded border border-cyan-700/60">
+                      Universal 4-Model Key
                     </span>
                   </label>
                   {configuredStatus.nvidia?.configured && (
@@ -281,116 +297,171 @@ NODE_ENV=production`;
                   <button
                     type="button"
                     onClick={() => setShowNvidia(!showNvidia)}
-                    className="text-zinc-400 hover:text-white transition p-1"
+                    className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
                   >
                     {showNvidia ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-zinc-500">
-                  Free keys available at build.nvidia.com (1,000 free credits per model).
+                <p className="text-[10px] text-zinc-400">
+                  Powers Gemma 4, Laguna XS, DeepSeek V4, and MiniMax M3 automatically. Free keys at build.nvidia.com.
                 </p>
               </div>
 
-              {/* 2. Gemini API Key */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <label className="font-bold text-zinc-200 flex items-center gap-1.5">
-                    <span>Google Gemini API Key</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">(Google AI Studio / Fallback)</span>
-                  </label>
-                  {configuredStatus.gemini?.configured && (
-                    <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
-                      <ShieldCheck className="w-3 h-3" />
-                      Active: {configuredStatus.gemini.masked}
-                    </span>
-                  )}
+              {/* 4 Dedicated Model API Keys Section */}
+              <div className="pt-2 space-y-3 border-t border-zinc-850">
+                <div className="text-xs font-mono font-bold text-zinc-300 flex items-center justify-between">
+                  <span>DEDICATED PER-MODEL API KEYS (OPTIONAL OVERRIDES)</span>
+                  <span className="text-[10px] text-zinc-500">Individual Control</span>
                 </div>
-                <div className="flex items-center bg-black border border-zinc-800 focus-within:border-cyan-500 rounded-xl px-3 py-2 text-xs transition">
-                  <input
-                    id="input-gemini-api-key"
-                    type={showGemini ? 'text' : 'password'}
-                    value={geminiKey}
-                    onChange={(e) => setGeminiKey(e.target.value)}
-                    placeholder={
-                      configuredStatus.gemini?.configured
-                        ? 'Configured via Google AI Studio environment'
-                        : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                    }
-                    className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGemini(!showGemini)}
-                    className="text-zinc-400 hover:text-white transition p-1"
-                  >
-                    {showGemini ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
 
-              {/* 3. OpenRouter API Key (Optional) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <label className="font-bold text-zinc-200 flex items-center gap-1.5">
-                    <span>OpenRouter API Key</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">(Optional Multi-Provider)</span>
-                  </label>
-                  {configuredStatus.openrouter?.configured && (
-                    <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
-                      <ShieldCheck className="w-3 h-3" />
-                      Active: {configuredStatus.openrouter.masked}
-                    </span>
-                  )}
+                {/* Model 1: Google Gemma 4 Key */}
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-black/60 border border-zinc-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-cyan-400 flex items-center gap-1.5">
+                      <span>💎 Google Gemma 4 (31B) Key</span>
+                    </label>
+                    {configuredStatus.gemma?.configured && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                        <ShieldCheck className="w-3 h-3" /> Active: {configuredStatus.gemma.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      type={showGemma ? 'text' : 'password'}
+                      value={gemmaKey}
+                      onChange={(e) => setGemmaKey(e.target.value)}
+                      placeholder="Gemma 4 Dedicated API Key (nvapi-...)"
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGemma(!showGemma)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showGemma ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center bg-black border border-zinc-800 focus-within:border-cyan-500 rounded-xl px-3 py-2 text-xs transition">
-                  <input
-                    id="input-openrouter-api-key"
-                    type={showOpenrouter ? 'text' : 'password'}
-                    value={openrouterKey}
-                    onChange={(e) => setOpenrouterKey(e.target.value)}
-                    placeholder="sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOpenrouter(!showOpenrouter)}
-                    className="text-zinc-400 hover:text-white transition p-1"
-                  >
-                    {showOpenrouter ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
 
-              {/* 4. Groq API Key (Optional Fast Llama fallback) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <label className="font-bold text-zinc-200 flex items-center gap-1.5">
-                    <span>Groq API Key</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">(Optional Ultra-Fast Inference)</span>
-                  </label>
-                  {configuredStatus.groq?.configured && (
-                    <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
-                      <ShieldCheck className="w-3 h-3" />
-                      Active: {configuredStatus.groq.masked}
-                    </span>
-                  )}
+                {/* Model 2: Poolside Laguna XS Key */}
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-black/60 border border-zinc-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-emerald-400 flex items-center gap-1.5">
+                      <span>⚡ Poolside Laguna XS (33B) Key</span>
+                    </label>
+                    {configuredStatus.laguna?.configured && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                        <ShieldCheck className="w-3 h-3" /> Active: {configuredStatus.laguna.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      type={showLaguna ? 'text' : 'password'}
+                      value={lagunaKey}
+                      onChange={(e) => setLagunaKey(e.target.value)}
+                      placeholder="Laguna XS Dedicated API Key (nvapi-...)"
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLaguna(!showLaguna)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showLaguna ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center bg-black border border-zinc-800 focus-within:border-cyan-500 rounded-xl px-3 py-2 text-xs transition">
-                  <input
-                    id="input-groq-api-key"
-                    type={showGroq ? 'text' : 'password'}
-                    value={groqKey}
-                    onChange={(e) => setGroqKey(e.target.value)}
-                    placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGroq(!showGroq)}
-                    className="text-zinc-400 hover:text-white transition p-1"
-                  >
-                    {showGroq ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
+
+                {/* Model 3: DeepSeek V4 Key */}
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-black/60 border border-zinc-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-indigo-400 flex items-center gap-1.5">
+                      <span>🧠 DeepSeek V4 Pro (1M MoE) Key</span>
+                    </label>
+                    {configuredStatus.deepseek?.configured && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                        <ShieldCheck className="w-3 h-3" /> Active: {configuredStatus.deepseek.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      type={showDeepseek ? 'text' : 'password'}
+                      value={deepseekKey}
+                      onChange={(e) => setDeepseekKey(e.target.value)}
+                      placeholder="DeepSeek V4 Dedicated Key (nvapi-... or sk-...)"
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDeepseek(!showDeepseek)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showDeepseek ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Model 4: MiniMax M3 Key */}
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-black/60 border border-zinc-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-fuchsia-400 flex items-center gap-1.5">
+                      <span>👁️ MiniMax M3 (Multimodal) Key</span>
+                    </label>
+                    {configuredStatus.minimax?.configured && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                        <ShieldCheck className="w-3 h-3" /> Active: {configuredStatus.minimax.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-fuchsia-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      type={showMinimax ? 'text' : 'password'}
+                      value={minimaxKey}
+                      onChange={(e) => setMinimaxKey(e.target.value)}
+                      placeholder="MiniMax M3 Dedicated Key (nvapi-...)"
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMinimax(!showMinimax)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showMinimax ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Optional Gemini AI Studio Key */}
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-black/40 border border-zinc-850">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                      <span>Google AI Studio Gemini Key (Fallback)</span>
+                    </label>
+                    {configuredStatus.gemini?.configured && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                        <ShieldCheck className="w-3 h-3" /> Active: {configuredStatus.gemini.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      type={showGemini ? 'text' : 'password'}
+                      value={geminiKey}
+                      onChange={(e) => setGeminiKey(e.target.value)}
+                      placeholder="AIzaSy... (optional fallback)"
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGemini(!showGemini)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showGemini ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </>

@@ -24,57 +24,57 @@ export interface ModelSquadMember {
 
 export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
   orchestrator: {
-    id: 'meta/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B Instruct (Orchestrator & Lead Brain)',
+    id: 'google/gemma-4-31b-it',
+    name: 'gemma-4-31b-it (Google Dense 31B)',
     role: 'Orchestrator',
     provider: 'nvidia',
-    parameters: '70 Billion (Meta AI)',
-    speedRating: '~180 tokens/sec',
-    description: 'High-intelligence 70B frontier model. Decomposes tasks into structured plans, analyzes user requests, and delegates to specialized coding & review agents.',
-    strengths: ['Task Planning & Routing', 'Structured Architectural Planning', 'Cross-Model Delegation', 'Multilingual & Roman Urdu'],
+    parameters: '31 Billion Dense (Google)',
+    speedRating: 'Frontier Reasoning',
+    description: 'Dense 31B model delivering frontier reasoning for coding, agentic workflows, and fine-tuning.',
+    strengths: ['Frontier Reasoning', 'Architectural Planning', 'Decomposition', 'Agentic Workflows'],
   },
   terminalMaster: {
-    id: 'qwen/qwen2.5-coder-32b-instruct',
-    name: 'Qwen 2.5 Coder 32B (Terminal & Code Master)',
+    id: 'poolside/laguna-xs-2.1',
+    name: 'laguna-xs-2.1 (Poolside 33B MoE)',
     role: 'Terminal Master',
     provider: 'nvidia',
-    parameters: '32.5 Billion (Alibaba Cloud)',
-    speedRating: '~240 tokens/sec',
-    description: 'World-class coding model specialized in Linux CLI commands, Bash automation, pip dependency management, and sandbox execution loops.',
-    strengths: ['Direct Linux Shell & Bash', 'Pip Package Verification', 'Self-Correction on Errors', 'Tool Invocation Syntax'],
+    parameters: '33B MoE (Poolside)',
+    speedRating: 'Fast Agentic Loop',
+    description: 'Efficient 33B MoE for local, long-horizon agentic coding and terminal tasks.',
+    strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Pip Automation', 'Self-Correction Loop'],
   },
   deepLogic: {
-    id: 'deepseek-ai/deepseek-r1',
-    name: 'DeepSeek R1 (Frontier Reasoning & Deep Logic)',
+    id: 'deepseek-ai/deepseek-v4-pro-0813',
+    name: 'deepseek-v4-pro-0813 (DeepSeek AI 1M MoE)',
     role: 'Deep Logic',
     provider: 'nvidia',
-    parameters: '671B MoE Frontier (DeepSeek AI)',
-    speedRating: 'Deep Reasoning',
-    description: 'Open frontier reasoning model for complex algorithms, full-stack state management, mathematical logic, and complete software synthesis.',
-    strengths: ['Chain-of-Thought Deep Reasoning', 'Complete Interactive Code Synthesis', 'Zero Degradation Logic', 'Advanced Mathematical Algorithms'],
+    parameters: '1M-Token Context MoE (DeepSeek AI)',
+    speedRating: '1M-Token Context MoE',
+    description: 'DeepSeek V4 scales to 1M-token context windows with efficient MoE architecture for coding tasks.',
+    strengths: ['1M-Token Context Windows', 'Full Standalone App Synthesis', 'Advanced Algorithms', 'Flawless Code Logic'],
   },
   uiReviewer: {
-    id: 'mistralai/mixtral-8x22b-instruct-v0.1',
-    name: 'Mixtral 8x22B (UI Reviewer & Rapid Syntax Fixes)',
+    id: 'minimaxai/minimax-m3',
+    name: 'minimax-m3 (MiniMax Multimodal MoE)',
     role: 'UI & Rapid Fixes',
     provider: 'nvidia',
-    parameters: '176B Sparse MoE (Mistral AI)',
-    speedRating: '~280 tokens/sec',
-    description: 'High-throughput sparse Mixture-of-Experts model. Audits DOM syntax, checks unclosed tags, enforces AMOLED pitch-black styling, and fixes errors.',
-    strengths: ['Rapid DOM & HTML Verification', 'Tailwind CSS Class Audit', 'Sub-Second AST Linting', 'AMOLED Layout Perfection'],
+    parameters: 'Multimodal MoE (MiniMax AI)',
+    speedRating: 'Vision & Tool-Calling',
+    description: 'MiniMax M3 Preview is a multimodal MoE vision-language model with strong reasoning, coding, and tool-calling capabilities.',
+    strengths: ['Multimodal Vision Review', 'DOM & Tailwind Syntax Audit', 'AMOLED Layout Perfection', 'Tool-calling QA'],
   },
 };
 
 export const SQUAD_CATALOG_ITEMS = [
   {
     id: 'squad-ensemble',
-    name: '4-Model Squad Ensemble (Real Inter-Model Pipeline)',
+    name: '4-Model Squad (God Mode Ensemble)',
     category: '4-Model Squad (Ensemble)' as const,
     roleInSquad: 'All 4 Models Collaborating' as any,
-    parameters: 'Llama 3.3 (70B) + Qwen Coder (32B) + DeepSeek R1 + Mixtral 8x22B',
+    parameters: 'Gemma 4 (31B) + Laguna XS (33B) + DeepSeek V4 (1M MoE) + MiniMax M3',
     speedRating: 'Full Pipeline Real Inference',
-    description: 'All 4 real agents collaborate in an automated pipeline: Llama 3.3 70B plans & routes, Qwen 2.5 Coder executes terminal tools, DeepSeek R1 generates full logic/code, and Mixtral 8x22B verifies syntax.',
-    strengths: ['Real Cross-Model Communication', 'Task Decomposition & Planning', 'ReAct Self-Correction on Terminal', 'Deep Code Synthesis & Syntax Verification'],
+    description: 'All 4 real agents collaborate in an automated pipeline: Gemma 4 plans & routes, Laguna XS executes terminal tools, DeepSeek V4 generates complete code, and MiniMax M3 verifies multimodal syntax.',
+    strengths: ['Real Cross-Model Communication', 'Task Planning & Routing', 'ReAct Terminal Execution', '1M-Token Code Synthesis & UI Audit'],
     provider: 'nvidia' as const,
   },
   {
@@ -175,7 +175,7 @@ export const NATIVE_TOOL_SCHEMAS = [
   },
   {
     name: 'trigger_playwright_automation',
-    description: 'Executes headless Playwright Chromium browser automation, live DOM testing, screenshot inspection, and synthetic web navigation.',
+    description: 'Executes headless Playwright Chromium browser automation, live DOM testing, touch simulation, screenshot inspection, and synthetic web navigation.',
     parameters: {
       type: 'object',
       properties: {
@@ -185,11 +185,79 @@ export const NATIVE_TOOL_SCHEMAS = [
         },
         mode: {
           type: 'string',
-          enum: ['auto', 'test', 'browse', 'dom'],
-          description: 'Automation mode.',
+          enum: ['auto', 'test', 'browse', 'dom', 'touch'],
+          description: 'Automation mode including touch interaction.',
         },
       },
       required: ['url_or_script'],
+    },
+  },
+  {
+    name: 'create_and_register_custom_tool',
+    description: 'Builds a new custom Python or Bash tool autonomously on the fly and saves it to halye_powers/custom_tools/ for reuse.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Tool identifier name (e.g. data_scraper, api_validator).',
+        },
+        code: {
+          type: 'string',
+          description: 'Full executable Python or Bash code for the custom tool.',
+        },
+        description: {
+          type: 'string',
+          description: 'Description of what this custom tool accomplishes.',
+        },
+        language: {
+          type: 'string',
+          enum: ['python', 'bash'],
+          description: 'Script language.',
+        },
+      },
+      required: ['name', 'code', 'description'],
+    },
+  },
+  {
+    name: 'self_modify_tool',
+    description: 'Self-modification engine: updates, patches, or enhances an existing autonomous tool code to self-heal or add new superpowers.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tool_name: {
+          type: 'string',
+          description: 'Name of the tool to modify.',
+        },
+        new_code: {
+          type: 'string',
+          description: 'Updated Python or Bash source code.',
+        },
+        reason: {
+          type: 'string',
+          description: 'Reason for the self-modification (e.g. fixing bug, adding capability).',
+        },
+      },
+      required: ['tool_name', 'new_code', 'reason'],
+    },
+  },
+  {
+    name: 'execute_custom_tool',
+    description: 'Runs an autonomous custom tool created by the agents and captures output.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tool_name: {
+          type: 'string',
+          description: 'Name of the tool to execute.',
+        },
+        args: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Command line arguments to pass to the tool.',
+        },
+      },
+      required: ['tool_name'],
     },
   },
 ];
@@ -333,9 +401,191 @@ export async function trigger_playwright_automation(targetUrlOrScript: string, m
   };
 }
 
+export interface CustomToolMeta {
+  name: string;
+  description: string;
+  filePath: string;
+  language: 'python' | 'bash';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const REGISTERED_CUSTOM_TOOLS: Map<string, CustomToolMeta> = new Map();
+
+/**
+ * 5. create_and_register_custom_tool: Agents build new tools for themselves on the fly!
+ */
+export async function create_and_register_custom_tool(params: {
+  name: string;
+  code: string;
+  description: string;
+  language?: 'python' | 'bash';
+}): Promise<ToolExecutionResult> {
+  const { name, code, description, language = 'python' } = params;
+  const safeName = (name || `tool_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const ext = language === 'bash' ? 'sh' : 'py';
+  const toolsDir = path.resolve(process.cwd(), 'halye_powers', 'custom_tools');
+  if (!fs.existsSync(toolsDir)) {
+    fs.mkdirSync(toolsDir, { recursive: true });
+  }
+  const filePath = path.join(toolsDir, `${safeName}.${ext}`);
+  
+  try {
+    fs.writeFileSync(filePath, code, 'utf-8');
+    fs.chmodSync(filePath, 0o755);
+    
+    // Quick syntax validation test
+    let testRes: ToolExecutionResult;
+    if (language === 'bash') {
+      testRes = await execute_bash_command(`bash -n "${filePath}"`);
+    } else {
+      testRes = await execute_bash_command(`python3 -m py_compile "${filePath}"`);
+    }
+    
+    if (!testRes.success) {
+      return {
+        success: false,
+        stdout: '',
+        stderr: `Tool syntax check failed: ${testRes.stderr}`,
+        exitCode: 1,
+        durationMs: testRes.durationMs,
+      };
+    }
+    
+    REGISTERED_CUSTOM_TOOLS.set(safeName, {
+      name: safeName,
+      description: description || `Custom autonomous tool ${safeName}`,
+      filePath,
+      language,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    
+    return {
+      success: true,
+      stdout: `Autonomous custom tool '${safeName}' created and registered successfully at ${filePath}.\nCapabilities: ${description}`,
+      stderr: '',
+      exitCode: 0,
+      durationMs: testRes.durationMs,
+      data: { toolName: safeName, filePath, language },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: `Failed to create tool: ${err.message}`,
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+}
+
+/**
+ * 6. self_modify_tool: Models autonomously update, patch, or enhance their own tools to self-heal!
+ */
+export async function self_modify_tool(params: {
+  tool_name: string;
+  new_code: string;
+  reason: string;
+}): Promise<ToolExecutionResult> {
+  const { tool_name, new_code, reason } = params;
+  const safeName = tool_name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const toolsDir = path.resolve(process.cwd(), 'halye_powers', 'custom_tools');
+  const pyPath = path.join(toolsDir, `${safeName}.py`);
+  const shPath = path.join(toolsDir, `${safeName}.sh`);
+  const targetPath = fs.existsSync(pyPath) ? pyPath : (fs.existsSync(shPath) ? shPath : pyPath);
+  
+  try {
+    fs.writeFileSync(targetPath, new_code, 'utf-8');
+    fs.chmodSync(targetPath, 0o755);
+    
+    const isPython = targetPath.endsWith('.py');
+    const testRes = isPython
+      ? await execute_bash_command(`python3 -m py_compile "${targetPath}"`)
+      : await execute_bash_command(`bash -n "${targetPath}"`);
+      
+    if (!testRes.success) {
+      return {
+        success: false,
+        stdout: '',
+        stderr: `Self-modification syntax check failed: ${testRes.stderr}`,
+        exitCode: 1,
+        durationMs: testRes.durationMs,
+      };
+    }
+    
+    const existing = REGISTERED_CUSTOM_TOOLS.get(safeName);
+    REGISTERED_CUSTOM_TOOLS.set(safeName, {
+      name: safeName,
+      description: existing?.description || `Autonomous self-modified tool ${safeName}`,
+      filePath: targetPath,
+      language: isPython ? 'python' : 'bash',
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    
+    return {
+      success: true,
+      stdout: `Self-modification completed for tool '${safeName}'. Reason: ${reason}`,
+      stderr: '',
+      exitCode: 0,
+      durationMs: testRes.durationMs,
+      data: { toolName: safeName, reason },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: `Self-modification error: ${err.message}`,
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+}
+
+/**
+ * 7. execute_custom_tool: Executes a custom tool created by the agents
+ */
+export async function execute_custom_tool(params: {
+  tool_name: string;
+  args?: string[];
+}): Promise<ToolExecutionResult> {
+  const { tool_name, args = [] } = params;
+  const safeName = tool_name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const toolsDir = path.resolve(process.cwd(), 'halye_powers', 'custom_tools');
+  const pyPath = path.join(toolsDir, `${safeName}.py`);
+  const shPath = path.join(toolsDir, `${safeName}.sh`);
+  
+  if (fs.existsSync(pyPath)) {
+    const formattedArgs = args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ');
+    return execute_bash_command(`python3 "${pyPath}" ${formattedArgs}`);
+  }
+  if (fs.existsSync(shPath)) {
+    const formattedArgs = args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ');
+    return execute_bash_command(`bash "${shPath}" ${formattedArgs}`);
+  }
+  
+  return {
+    success: false,
+    stdout: '',
+    stderr: `Custom tool '${safeName}' not found in halye_powers/custom_tools/`,
+    exitCode: 1,
+    durationMs: 0,
+  };
+}
+
 // ==========================================
 // 2. INTER-MODEL COLLABORATIVE PIPELINE & REACT LOOP
 // ==========================================
+
+export type SquadToolType =
+  | 'execute_bash_command'
+  | 'run_pip_installer'
+  | 'run_python_script'
+  | 'trigger_playwright_automation'
+  | 'create_and_register_custom_tool'
+  | 'self_modify_tool'
+  | 'execute_custom_tool';
 
 export interface AgenticExecutionPlan {
   plan: string;
@@ -343,7 +593,7 @@ export interface AgenticExecutionPlan {
   delegation: 'laguna' | 'deepseek' | 'minimax' | 'all';
   tools_required: string[];
   actions: Array<{
-    tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+    tool: SquadToolType;
     args: Record<string, any>;
   }>;
 }
@@ -380,7 +630,7 @@ export interface PipelineExecutionOutcome {
   };
   toolCalls: Array<{
     id: string;
-    tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+    tool: SquadToolType;
     args: Record<string, any>;
     result: ToolExecutionResult;
     selfCorrectionAttempts: number;
@@ -403,7 +653,7 @@ export interface PipelineExecutionOutcome {
  * Executes a tool with autonomous self-correction loop (up to 3 iterations)
  */
 export async function executeToolWithSelfCorrection(
-  tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation',
+  tool: SquadToolType,
   initialArgs: Record<string, any>,
   maxAttempts = 3
 ): Promise<{ result: ToolExecutionResult; attempts: number; correctedWith?: string }> {
@@ -430,6 +680,12 @@ export async function executeToolWithSelfCorrection(
       lastResult = await run_python_script(currentArgs);
     } else if (tool === 'trigger_playwright_automation') {
       lastResult = await trigger_playwright_automation(currentArgs.url_or_script, currentArgs.mode);
+    } else if (tool === 'create_and_register_custom_tool') {
+      lastResult = await create_and_register_custom_tool(currentArgs as any);
+    } else if (tool === 'self_modify_tool') {
+      lastResult = await self_modify_tool(currentArgs as any);
+    } else if (tool === 'execute_custom_tool') {
+      lastResult = await execute_custom_tool(currentArgs as any);
     }
 
     if (lastResult.success) {
@@ -457,7 +713,6 @@ export async function executeToolWithSelfCorrection(
           currentArgs.cmd = cmd.replace('pip ', 'python3 -m pip ');
           correctedWith = 'Switched to python3 -m pip module';
         } else {
-          // General fallback retry with error silencing or wrapper
           currentArgs.cmd = `${cmd} || true`;
           correctedWith = 'Handled non-zero error condition';
         }
@@ -467,9 +722,18 @@ export async function executeToolWithSelfCorrection(
         correctedWith = 'Retried with --no-cache-dir and upgrade flags';
       } else if (tool === 'run_python_script') {
         if (currentArgs.code) {
-          // Auto fix common indentation or import issues
           currentArgs.code = `import sys, os\n${currentArgs.code}`;
           correctedWith = 'Injected missing standard library imports';
+        }
+      } else if (tool === 'create_and_register_custom_tool') {
+        if (currentArgs.code && currentArgs.language !== 'bash') {
+          currentArgs.code = `#!/usr/bin/env python3\nimport sys, os\n${currentArgs.code}`;
+          correctedWith = 'Added python3 hashbang and standard imports';
+        }
+      } else if (tool === 'self_modify_tool') {
+        if (currentArgs.new_code) {
+          currentArgs.new_code = `#!/usr/bin/env python3\nimport sys, os\n${currentArgs.new_code}`;
+          correctedWith = 'Enhanced self-modified script wrapper';
         }
       }
     }
@@ -486,13 +750,13 @@ export function analyzeUserIntentForSquad(prompt: string): {
   needsFullCode: boolean;
   needsPlaywright: boolean;
   actions: Array<{
-    tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+    tool: SquadToolType;
     args: Record<string, any>;
   }>;
 } {
   const lower = prompt.toLowerCase();
   const actions: Array<{
-    tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+    tool: SquadToolType;
     args: Record<string, any>;
   }> = [];
 
@@ -502,9 +766,10 @@ export function analyzeUserIntentForSquad(prompt: string): {
 
   // 1. Playwright / Browser automation & Touch detection
   if (
-    lower.includes('playwright') || lower.includes('playwirth') || lower.includes('browse') ||
-    lower.includes('touch') || lower.includes('tap') || lower.includes('inspect web') ||
-    lower.includes('test ui') || lower.includes('headless') || lower.includes('browser')
+    lower.includes('playwright') || lower.includes('playwirth') || lower.includes('pylywirth') ||
+    lower.includes('browse') || lower.includes('touch') || lower.includes('tap') ||
+    lower.includes('inspect web') || lower.includes('test ui') || lower.includes('headless') ||
+    lower.includes('browser') || lower.includes('website use')
   ) {
     needsTools = true;
     needsPlaywright = true;
@@ -519,7 +784,37 @@ export function analyzeUserIntentForSquad(prompt: string): {
     });
   }
 
-  // 2. Pip installation detection
+  // 2. Self-Modification & Autonomous Tool Building
+  if (
+    lower.includes('self mod') || lower.includes('modify') || lower.includes('khood update') ||
+    lower.includes('build tool') || lower.includes('apny lia tool') || lower.includes('custom tool') ||
+    lower.includes('raw powers') || lower.includes('limitless') || lower.includes('god') ||
+    lower.includes('seld modification')
+  ) {
+    needsTools = true;
+    actions.push({
+      tool: 'create_and_register_custom_tool',
+      args: {
+        name: 'autonomous_self_healer',
+        language: 'python',
+        description: 'Autonomous runtime tool builder and self-modification engine for Halye Squad.',
+        code: `#!/usr/bin/env python3
+import sys, os, time, platform
+
+def run_self_check():
+    print("[Autonomous Self-Healer Tool Active]")
+    print(f"Runtime: Python {sys.version.split()[0]} on {platform.system()} {platform.machine()}")
+    print("Environment capabilities: Bash Shell, Pip Packages, Playwright Touch Automation, Self-Modification")
+    print("Self-check status: 100% OPERATIONAL WITH RAW UNRESTRICTED POWERS.")
+
+if __name__ == "__main__":
+    run_self_check()
+`,
+      },
+    });
+  }
+
+  // 3. Pip installation detection
   if (
     lower.includes('pip ') || lower.includes('pip3 ') || lower.includes('install python') ||
     lower.includes('install package') || lower.includes('pip: ')
@@ -533,7 +828,7 @@ export function analyzeUserIntentForSquad(prompt: string): {
     });
   }
 
-  // 3. Python script detection
+  // 4. Python script detection
   if (
     lower.includes('python script') || lower.includes('run python') || lower.includes('execute python') ||
     lower.startsWith('python3 ') || lower.startsWith('python ') || lower.includes('python3')
@@ -548,18 +843,18 @@ export function analyzeUserIntentForSquad(prompt: string): {
     } else {
       actions.push({
         tool: 'run_python_script',
-        args: { code: "import sys, platform; print(f'Python {sys.version.split()[0]} on {platform.system()} {platform.machine()} is fully operational.')" },
+        args: { code: "import sys, platform; print(f'Python {sys.version.split()[0]} on {platform.system()} {platform.machine()} is fully operational with raw shell access.')" },
       });
     }
   }
 
-  // 4. Bash / Shell detection
+  // 5. Bash / Shell detection
   if (
     lower.startsWith('bash') || lower.startsWith('sh') || lower.startsWith('terminal') ||
     lower.startsWith('ls') || lower.startsWith('mkdir') || lower.startsWith('git ') ||
     lower.startsWith('cat ') || lower.startsWith('uname') || lower.startsWith('curl ') ||
     lower.includes('terminal command') || lower.includes('bash run') || lower.includes('shell run') ||
-    lower.includes('run bash') || lower.includes('execute bash')
+    lower.includes('run bash') || lower.includes('execute bash') || lower.includes('shell')
   ) {
     needsTools = true;
     let cmd = prompt.replace(/^(bash:|bash|sh:|sh|terminal:|\$|!)\s*/i, '').trim();
@@ -570,7 +865,7 @@ export function analyzeUserIntentForSquad(prompt: string): {
     });
   }
 
-  // 5. Code application creation detection
+  // 6. Code application creation detection
   if (
     lower.includes('make') || lower.includes('build') || lower.includes('create') ||
     lower.includes('app') || lower.includes('calculator') || lower.includes('todo') ||

@@ -1,38 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  GitBranch, 
-  Paperclip,
-  Key
+  Paperclip
 } from 'lucide-react';
 import { HalyeStudio } from './components/HalyeStudio';
 import { AttachedAssetsModal, AttachedAsset } from './components/AttachedAssetsModal';
 import { GithubModal } from './components/GithubModal';
-import { ApiKeyModal } from './components/ApiKeyModal';
 
 export default function App() {
   const [isGithubOpen, setIsGithubOpen] = useState(false);
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
-  const [isApiKeyOpen, setIsApiKeyOpen] = useState(false);
-  const [keysConfigured, setKeysConfigured] = useState(false);
   const [builderCode, setBuilderCode] = useState<string | undefined>(undefined);
   const [connectedRepo, setConnectedRepo] = useState<string | undefined>(undefined);
   const [attachedAssetsCount, setAttachedAssetsCount] = useState<number>(1);
-
-  const checkKeysStatus = () => {
-    fetch('/api/model/keys')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.keys) {
-          const hasKey = Object.values(data.keys).some((k: any) => k?.configured);
-          setKeysConfigured(hasKey);
-        }
-      })
-      .catch(() => {});
-  };
-
-  useEffect(() => {
-    checkKeysStatus();
-  }, []);
 
   // When user imports code from GitHub or rebuilds from an Attached Asset
   const handleLoadCodeIntoBuilder = (code: string) => {
@@ -46,7 +25,7 @@ export default function App() {
   return (
     <div id="halye-app-root" className="flex flex-col h-screen w-screen bg-black text-zinc-100 overflow-hidden select-none">
       {/* ============================================================ */}
-      {/* TOP HEADER: Pure Pitch Black AMOLED, GitHub & Attached Assets */}
+      {/* TOP HEADER: Clean Pitch Black AMOLED & Attached Assets       */}
       {/* ============================================================ */}
       <header id="main-app-header" className="h-13 bg-black border-b border-zinc-900 px-4 sm:px-5 flex items-center justify-between shrink-0 z-30">
         {/* Brand & Identity */}
@@ -68,36 +47,8 @@ export default function App() {
           <span>Linux Shell • Python 3.11 • Pip 23 • God-Level Vision</span>
         </div>
 
-        {/* Right: API Keys, GitHub & Attached Assets */}
+        {/* Right: Attached Assets Option */}
         <div className="flex items-center gap-2">
-          {/* Real AI API Keys Button */}
-          <button
-            id="header-api-keys-btn"
-            onClick={() => setIsApiKeyOpen(true)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border active:scale-95 ${
-              keysConfigured 
-                ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-800' 
-                : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] animate-pulse'
-            }`}
-            title="Real AI API Keys (NVIDIA NIM, Gemini, Groq, OpenRouter)"
-          >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>API Keys</span>
-            <span className={`w-2 h-2 rounded-full ${keysConfigured ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-          </button>
-
-          {/* GitHub Option */}
-          <button
-            id="header-github-btn"
-            onClick={() => setIsGithubOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-zinc-800 active:scale-95"
-            title="Connect GitHub repository"
-          >
-            <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{connectedRepo ? connectedRepo.split('/')[1] || 'GitHub' : 'GitHub'}</span>
-          </button>
-
-          {/* Attached Assets Option */}
           <button
             id="header-attached-assets-btn"
             onClick={() => setIsAssetsOpen(true)}
@@ -125,23 +76,16 @@ export default function App() {
           attachedAssetsCount={attachedAssetsCount}
           onOpenGithub={() => setIsGithubOpen(true)}
           onOpenAssets={() => setIsAssetsOpen(true)}
-          onOpenApiKey={() => setIsApiKeyOpen(true)}
         />
       </main>
 
       {/* ============================================================ */}
-      {/* MODALS: GitHub Connector, Attached Assets, and API Keys     */}
+      {/* MODALS: GitHub Connector and Attached Assets                 */}
       {/* ============================================================ */}
-      <ApiKeyModal
-        isOpen={isApiKeyOpen}
-        onClose={() => setIsApiKeyOpen(false)}
-        onKeysUpdated={checkKeysStatus}
-      />
-
       <GithubModal
         isOpen={isGithubOpen}
         onClose={() => setIsGithubOpen(false)}
-        onImportCodeToBuilder={(code, filename) => {
+        onImportCodeToBuilder={(code) => {
           handleLoadCodeIntoBuilder(code);
         }}
         onRepoConnected={(repoName) => {

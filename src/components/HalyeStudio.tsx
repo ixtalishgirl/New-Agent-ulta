@@ -43,6 +43,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Cpu,
+  ChevronRight,
   Key
 } from 'lucide-react';
 import { 
@@ -59,63 +60,58 @@ import {
 import { WorkspaceExplorer } from './WorkspaceExplorer';
 import { PowersSuite } from './PowersSuite';
 import { ScreenshotModal } from './ScreenshotModal';
-import { ApiKeyModal } from './ApiKeyModal';
 import { BLANK_CANVAS_CODE } from '../templates';
 
 export const HALYE_CORE_MODELS = [
   {
     id: 'squad-ensemble',
-    name: 'All 4 Models Squad (Collaborative Ensemble)',
-    shortName: '⚡ 4-Model Squad',
-    badge: 'Real Multi-Agent',
-    badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
-    icon: '⚡',
-    desc: 'Llama 3.3 70B (Plan) + Qwen Coder (Exec) + DeepSeek R1 (Code) + Mixtral 8x22B (UI)',
-  },
-  {
-    id: 'meta/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B Instruct (Solo Brain & Planner)',
-    shortName: '🧠 Llama 3.3 70B',
-    badge: '70B Orchestrator',
+    name: '4-Model Squad (God Mode)',
+    shortName: '⚡ God Mode (4 Models)',
+    badge: 'God Mode Ensemble',
     badgeColor: 'text-amber-400 bg-amber-950/60 border-amber-800/60',
-    icon: '🧠',
-    desc: 'Task decomposition, architecture planning, and Roman Urdu reasoning',
-  },
-  {
-    id: 'qwen/qwen2.5-coder-32b-instruct',
-    name: 'Qwen 2.5 Coder 32B (Solo Terminal Master)',
-    shortName: '💻 Qwen Coder 32B',
-    badge: 'Terminal Master',
-    badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60',
-    icon: '💻',
-    desc: 'Autonomous Linux bash, Python 3, pip, and agentic tool loop',
-  },
-  {
-    id: 'deepseek-ai/deepseek-r1',
-    name: 'DeepSeek R1 (Solo Reasoning & Code)',
-    shortName: '📐 DeepSeek R1',
-    badge: 'Reasoning R1',
-    badgeColor: 'text-blue-400 bg-blue-950/60 border-blue-800/60',
-    icon: '📐',
-    desc: 'Frontier reasoning engine for massive code context, algorithms, and deep logic',
-  },
-  {
-    id: 'mistralai/mixtral-8x22b-instruct-v0.1',
-    name: 'Mixtral 8x22B (Solo UI & Rapid Fixes)',
-    shortName: '⚡ Mixtral 8x22B',
-    badge: 'UI & Fixes',
-    badgeColor: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
     icon: '⚡',
-    desc: 'Rapid UI layout review, DOM syntax repair, and pure AMOLED styling',
+    desc: 'Gemma 4 (Reasoning) + Laguna XS (Terminal) + DeepSeek V4 (Code) + MiniMax M3 (Review)',
+    provider: 'NVIDIA NIM',
   },
   {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash (Google DeepMind)',
-    shortName: '✨ Gemini Flash',
-    badge: 'Google AI',
+    id: 'deepseek-ai/deepseek-v4-pro-0813',
+    name: 'deepseek-v4-pro-0813',
+    shortName: 'deepseek-v4-pro',
+    badge: '1M-Token MoE',
+    badgeColor: 'text-blue-400 bg-blue-950/60 border-blue-800/60',
+    icon: '🐳',
+    desc: 'DeepSeek V4 scales to 1M-token context windows with efficient MoE architecture for coding tasks.',
+    provider: 'DeepSeek AI',
+  },
+  {
+    id: 'poolside/laguna-xs-2.1',
+    name: 'laguna-xs-2.1',
+    shortName: 'laguna-xs-2.1',
+    badge: '33B MoE Terminal',
+    badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60',
+    icon: '🌐',
+    desc: 'Efficient 33B MoE for local, long-horizon agentic coding and terminal tasks',
+    provider: 'Poolside',
+  },
+  {
+    id: 'minimaxai/minimax-m3',
+    name: 'minimax-m3',
+    shortName: 'minimax-m3',
+    badge: 'Multimodal MoE',
+    badgeColor: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
+    icon: '🎙️',
+    desc: 'MiniMax M3 Preview is a multimodal MoE vision-language model with strong reasoning, coding, and tool-calling capabilities.',
+    provider: 'Minimaxai',
+  },
+  {
+    id: 'google/gemma-4-31b-it',
+    name: 'gemma-4-31b-it',
+    shortName: 'gemma-4-31b',
+    badge: 'Dense 31B Reasoning',
     badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
-    icon: '✨',
-    desc: 'Ultra-fast text, reasoning, and multimodal image analysis',
+    icon: '💎',
+    desc: 'Dense 31B model delivering frontier reasoning for coding, agentic workflows, and fine-tuning.',
+    provider: 'Google',
   },
 ];
 
@@ -127,7 +123,6 @@ interface HalyeStudioProps {
   attachedAssetsCount?: number;
   onOpenGithub: () => void;
   onOpenAssets: () => void;
-  onOpenApiKey?: () => void;
 }
 
 export const HalyeStudio: React.FC<HalyeStudioProps> = ({
@@ -136,7 +131,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   attachedAssetsCount = 1,
   onOpenGithub,
   onOpenAssets,
-  onOpenApiKey,
 }) => {
   // Main Builder & Sandbox State
   const [code, setCode] = useState<string>(initialCode || DEFAULT_HALYE_CODE);
@@ -174,7 +168,129 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   } | null>(null);
   const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'keys'>('models');
+  const [isSessionsDrawerOpen, setIsSessionsDrawerOpen] = useState(false);
+
+  // 4 Models & Dedicated API Key state
+  const [nvidiaNimKeyInput, setNvidiaNimKeyInput] = useState('');
+  const [showNimKey, setShowNimKey] = useState(false);
+  const [gemmaKeyInput, setGemmaKeyInput] = useState('');
+  const [showGemmaKey, setShowGemmaKey] = useState(false);
+  const [lagunaKeyInput, setLagunaKeyInput] = useState('');
+  const [showLagunaKey, setShowLagunaKey] = useState(false);
+  const [deepseekKeyInput, setDeepseekKeyInput] = useState('');
+  const [showDeepseekKey, setShowDeepseekKey] = useState(false);
+  const [minimaxKeyInput, setMinimaxKeyInput] = useState('');
+  const [showMinimaxKey, setShowMinimaxKey] = useState(false);
+
+  // Active inline key editing inside Models list
+  const [editingKeyForModel, setEditingKeyForModel] = useState<string | null>(null);
+  const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [hasNvidiaKeyConfigured, setHasNvidiaKeyConfigured] = useState(false);
+  const [modelKeyStatuses, setModelKeyStatuses] = useState<Record<string, { configured: boolean; masked: string | null; hasOwnKey?: boolean }>>({});
+
+  // Load configured keys status for all 4 models
+  const loadKeyStatus = () => {
+    fetch('/api/model/keys')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.keys) {
+          setModelKeyStatuses(data.keys);
+          if (data.keys.nvidia?.configured) {
+            setHasNvidiaKeyConfigured(true);
+          }
+          if (data.keys.nvidia?.masked && !nvidiaNimKeyInput) {
+            setNvidiaNimKeyInput(data.keys.nvidia.masked);
+          }
+          if (data.keys.gemma?.masked && !gemmaKeyInput && data.keys.gemma.hasOwnKey) {
+            setGemmaKeyInput(data.keys.gemma.masked);
+          }
+          if (data.keys.laguna?.masked && !lagunaKeyInput && data.keys.laguna.hasOwnKey) {
+            setLagunaKeyInput(data.keys.laguna.masked);
+          }
+          if (data.keys.deepseek?.masked && !deepseekKeyInput && data.keys.deepseek.hasOwnKey) {
+            setDeepseekKeyInput(data.keys.deepseek.masked);
+          }
+          if (data.keys.minimax?.masked && !minimaxKeyInput && data.keys.minimax.hasOwnKey) {
+            setMinimaxKeyInput(data.keys.minimax.masked);
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadKeyStatus();
+  }, []);
+
+  // Save single model key directly on model click / submit
+  const handleSaveSingleModelKey = async (modelId: string, apiKey: string) => {
+    setIsSavingKeys(true);
+    setKeySaveMessage(null);
+    try {
+      const cleanKey = apiKey.trim();
+      const res = await fetch('/api/model/single-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modelId,
+          apiKey: cleanKey.includes('••••') ? undefined : cleanKey,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const shortName = modelId.split('/')[1] || modelId;
+        setKeySaveMessage(`✓ Key for ${shortName} saved and activated!`);
+        loadKeyStatus();
+        setTimeout(() => setKeySaveMessage(null), 3500);
+      } else {
+        setKeySaveMessage(`Failed to save key: ${data.error || 'unknown'}`);
+      }
+    } catch (err: any) {
+      setKeySaveMessage(`Error saving key: ${err.message}`);
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
+  // Save all 4 model keys and master NVIDIA NIM key at once
+  const handleSaveModelKeys = async () => {
+    setIsSavingKeys(true);
+    setKeySaveMessage(null);
+    try {
+      const cleanNim = nvidiaNimKeyInput.trim();
+      const cleanGemma = gemmaKeyInput.trim();
+      const cleanLaguna = lagunaKeyInput.trim();
+      const cleanDeepseek = deepseekKeyInput.trim();
+      const cleanMinimax = minimaxKeyInput.trim();
+
+      const res = await fetch('/api/model/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nvidiaKey: cleanNim.includes('••••') ? undefined : cleanNim,
+          gemmaKey: cleanGemma.includes('••••') ? undefined : cleanGemma,
+          lagunaKey: cleanLaguna.includes('••••') ? undefined : cleanLaguna,
+          deepseekKey: cleanDeepseek.includes('••••') ? undefined : cleanDeepseek,
+          minimaxKey: cleanMinimax.includes('••••') ? undefined : cleanMinimax,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setKeySaveMessage('✓ All 4 Model Keys saved! Ready in God Mode and Solo Mode.');
+        setHasNvidiaKeyConfigured(true);
+        loadKeyStatus();
+        setTimeout(() => setKeySaveMessage(null), 4000);
+      } else {
+        setKeySaveMessage('Failed to save keys: ' + (data.error || 'unknown'));
+      }
+    } catch (err: any) {
+      setKeySaveMessage('Error saving keys: ' + err.message);
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
 
 
   // Fetch active AI model status on mount
@@ -220,10 +336,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   // Interactive Shell Terminal State (Right Pane)
   const [terminalInput, setTerminalInput] = useState('');
   const [isExecutingTerminal, setIsExecutingTerminal] = useState(false);
-  const [terminalHistory, setTerminalHistory] = useState<Array<{ cmd: string; out: string; err: string; exit: number; ms: number }>>([
-    { cmd: 'python3 halye_controller.py --status', out: '{\n  "agent": "Halye Assistant",\n  "status": "ONLINE",\n  "mode": "Direct Bash/Python/Pip/Playwright Automation",\n  "python_version": "3.11.2",\n  "model": "google/gemma-4-31b-it (4-Model Squad Orchestrator)"\n}', err: '', exit: 0, ms: 12 },
-    { cmd: 'uname -a', out: 'Linux halye-container 6.6.137+ #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux', err: '', exit: 0, ms: 8 }
-  ]);
+  const [terminalHistory, setTerminalHistory] = useState<Array<{ cmd: string; out: string; err: string; exit: number; ms: number }>>([]);
 
   // Multi-Session Chat Memory State (Clean & Fresh, Zero Simulated/Fake Messages)
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
@@ -249,75 +362,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [editingTitleText, setEditingTitleText] = useState('');
   const [inspectingScreenshot, setInspectingScreenshot] = useState<AttachedFile | null>(null);
   const [codeCopiedNotice, setCodeCopiedNotice] = useState<string | null>(null);
-
-  // In-Chat 4-Model Squad API Keys State
-  const [inChatNvidiaKey, setInChatNvidiaKey] = useState('');
-  const [inChatGeminiKey, setInChatGeminiKey] = useState('');
-  const [inChatGroqKey, setInChatGroqKey] = useState('');
-  const [inChatOpenRouterKey, setInChatOpenRouterKey] = useState('');
-  const [showInChatNvidia, setShowInChatNvidia] = useState(false);
-  const [showInChatGemini, setShowInChatGemini] = useState(false);
-  const [isSavingInChatKeys, setIsSavingInChatKeys] = useState(false);
-  const [inChatKeySaveMsg, setInChatKeySaveMsg] = useState<{ success: boolean; text: string } | null>(null);
-  const [keysConfiguredStatus, setKeysConfiguredStatus] = useState<any>(null);
-  const [isKeysBoxExpanded, setIsKeysBoxExpanded] = useState<boolean>(true);
-
-  const fetchKeysConfiguredStatus = () => {
-    fetch('/api/model/keys')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.keys) {
-          setKeysConfiguredStatus(data.keys);
-          const hasAny = Object.values(data.keys).some((k: any) => k?.configured);
-          if (!hasAny) {
-            setIsKeysBoxExpanded(true);
-          }
-        }
-      })
-      .catch(() => {});
-  };
-
-  useEffect(() => {
-    fetchKeysConfiguredStatus();
-  }, []);
-
-  const handleSaveInChatKeys = async () => {
-    setIsSavingInChatKeys(true);
-    setInChatKeySaveMsg(null);
-    try {
-      const payload: Record<string, string> = {};
-      if (inChatNvidiaKey.trim()) payload.nvidia = inChatNvidiaKey.trim();
-      if (inChatGeminiKey.trim()) payload.gemini = inChatGeminiKey.trim();
-      if (inChatGroqKey.trim()) payload.groq = inChatGroqKey.trim();
-      if (inChatOpenRouterKey.trim()) payload.openrouter = inChatOpenRouterKey.trim();
-
-      const res = await fetch('/api/model/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setInChatKeySaveMsg({
-          success: true,
-          text: 'Keys successfully saved! 4-Model Squad is active and ready for your prompts.',
-        });
-        fetchKeysConfiguredStatus();
-        fetch('/api/model/status')
-          .then((r) => r.json())
-          .then((d) => {
-            if (d.success) setModelInfo((prev) => prev ? { ...prev, status: d.status, activeModel: d.activeModel } : null);
-          })
-          .catch(() => {});
-      } else {
-        setInChatKeySaveMsg({ success: false, text: data.error || 'Failed to save keys' });
-      }
-    } catch (err: any) {
-      setInChatKeySaveMsg({ success: false, text: err.message || 'Error connecting to server' });
-    } finally {
-      setIsSavingInChatKeys(false);
-    }
-  };
 
   // Sync sessions to localStorage
   useEffect(() => {
@@ -531,19 +575,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
     const userMessageText = textToSend.trim();
 
-    // Direct API key extraction if user typed or pasted key in chat prompt
-    const nvidiaMatch = userMessageText.match(/nvapi-[A-Za-z0-9_-]{20,}/);
-    const geminiMatch = userMessageText.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-    const groqMatch = userMessageText.match(/gsk_[A-Za-z0-9_-]{20,}/);
-    const openrouterMatch = userMessageText.match(/sk-or-v1-[A-Za-z0-9_-]{30,}|sk-or-[A-Za-z0-9_-]{20,}/);
-    if (nvidiaMatch) setInChatNvidiaKey(nvidiaMatch[0]);
-    if (geminiMatch) setInChatGeminiKey(geminiMatch[0]);
-    if (groqMatch) setInChatGroqKey(groqMatch[0]);
-    if (openrouterMatch) setInChatOpenRouterKey(openrouterMatch[0]);
-    if (nvidiaMatch || geminiMatch || groqMatch || openrouterMatch) {
-      setIsKeysBoxExpanded(true);
-    }
-
     // Clear input & staged files
     setPrompt('');
     if (!overrideFiles) {
@@ -574,13 +605,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       });
 
       const data = await res.json();
-
-      if (data.showKeysBox) {
-        setIsKeysBoxExpanded(true);
-      }
-      if (data.keysSaved) {
-        fetchKeysConfiguredStatus();
-      }
 
       // If terminal execution returned in response
       let termResult: TerminalExecutionResult | undefined = undefined;
@@ -654,6 +678,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         fileCreated: data.fileCreated,
         pipeline: data.pipeline,
         toolCalls: data.toolCalls,
+        dialogue: data.dialogue || data.pipeline?.dialogue,
         timestamp: new Date().toLocaleTimeString(),
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
@@ -1171,12 +1196,16 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       {/* ============================================================ */}
       <div className={`${mobileActiveView === 'chat' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[480px] xl:w-[520px] h-full flex-col border-r border-zinc-900 bg-zinc-950/90 shrink-0 overflow-hidden`}>
         
-        {/* Agent Subheader Bar */}
+        {/* Agent Subheader Bar with Sessions Drawer Trigger */}
         <div className="p-3 px-4 border-b border-zinc-900 bg-black flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-cyan-400 text-xs font-bold font-mono">
+            <button
+              onClick={() => setIsSessionsDrawerOpen(true)}
+              className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-cyan-400 text-xs font-bold font-mono transition cursor-pointer active:scale-95"
+              title="Open Chat Sessions & Memory Drawer"
+            >
               &gt;_
-            </div>
+            </button>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-white tracking-wide">Halye Assistant</span>
@@ -1186,366 +1215,174 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button
-              id="header-api-keys-btn"
-              onClick={() => setIsApiKeyModalOpen(true)}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white text-[11px] font-mono flex items-center gap-1.5 border border-zinc-800 hover:border-cyan-500/40 transition cursor-pointer"
-              title="Open API Keys & GitHub Secrets Box"
-            >
-              <Key className="w-3 h-3 text-cyan-400" />
-              <span>API Keys</span>
-            </button>
-            <button
-              onClick={() => setActivePane('terminal')}
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-zinc-300 text-[11px] font-mono flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
-              title="Open Terminal View"
-            >
-              <Terminal className="w-3 h-3 text-emerald-400" />
-              <span>Terminal</span>
-            </button>
-          </div>
+          {/* Right: Clean Sessions Drawer Trigger Button */}
+          <button
+            onClick={() => setIsSessionsDrawerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-cyan-400 text-xs font-mono transition cursor-pointer active:scale-95 shadow-sm"
+            title="Manage Chat Sessions (Add, Delete, Clear)"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="max-w-[120px] truncate font-semibold">{activeSession.title}</span>
+            <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+          </button>
         </div>
 
-        {/* Per-Session Memory Control Bar */}
-        <div className="relative px-3.5 py-2 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between z-20">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <button
-              onClick={() => setIsSessionDropdownOpen(!isSessionDropdownOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-zinc-200 transition cursor-pointer max-w-[180px]"
-              title="Switch or view saved sessions"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span className="truncate font-semibold text-[11px]">{activeSession.title}</span>
-              <ChevronDown className={`w-3 h-3 text-zinc-500 shrink-0 transition-transform ${isSessionDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {editingSessionId === activeSession.id ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={editingTitleText}
-                  onChange={(e) => setEditingTitleText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveRenameSession(activeSession.id);
-                    if (e.key === 'Escape') setEditingSessionId(null);
-                  }}
-                  className="px-2 py-0.5 rounded bg-black border border-cyan-500 text-[11px] text-white font-mono focus:outline-none w-28"
-                  autoFocus
-                />
-                <button
-                  onClick={() => handleSaveRenameSession(activeSession.id)}
-                  className="p-1 rounded bg-cyan-500 text-black hover:bg-cyan-400 transition"
-                  title="Save title"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setEditingSessionId(activeSession.id);
-                  setEditingTitleText(activeSession.title);
-                }}
-                className="p-1 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                title="Rename current session"
-              >
-                <Edit2 className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              id="halye-keys-box-header-toggle"
-              onClick={() => setIsKeysBoxExpanded(!isKeysBoxExpanded)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[11px] font-mono transition cursor-pointer shadow-sm active:scale-95 ${
-                isKeysBoxExpanded
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-cyan-500/20'
-                  : 'bg-black hover:bg-zinc-900 border-zinc-800 text-cyan-400 hover:text-cyan-300'
-              }`}
-              title="Open or close 4-Model API Keys Box"
-            >
-              <Key className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Keys Box (Write Here)</span>
-              {keysConfiguredStatus && Object.values(keysConfiguredStatus).some((k: any) => k?.configured) ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-              )}
-            </button>
-            <button
-              id="halye-clear-chat-header-btn"
-              onClick={handleClearCurrentChat}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-zinc-400 hover:text-amber-400 text-[10px] font-mono transition cursor-pointer shadow-sm active:scale-95"
-              title="Clear all messages and history"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Clear Chat</span>
-            </button>
-            <button
-              onClick={handleCreateNewSession}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-cyan-400 hover:text-cyan-300 text-[10px] font-mono transition cursor-pointer shadow-sm"
-              title="Create new isolated session memory"
-            >
-              <Plus className="w-3 h-3" />
-              <span>New</span>
-            </button>
-          </div>
-
-          {/* Sessions Dropdown Menu (Side management) */}
-          {isSessionDropdownOpen && (
-            <div className="absolute left-3.5 top-11 z-30 w-72 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl p-2 space-y-2">
-              <div className="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-zinc-500 border-b border-zinc-900">
-                <span>SAVED SESSIONS ({sessions.length})</span>
-                <button 
-                  onClick={handleCreateNewSession}
-                  className="text-cyan-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                >
-                  <Plus className="w-2.5 h-2.5" /> New
-                </button>
-              </div>
-              <div className="max-h-56 overflow-y-auto space-y-0.5 py-1">
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    onClick={() => {
-                      setActiveSessionId(s.id);
-                      setIsSessionDropdownOpen(false);
-                    }}
-                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition ${
-                      s.id === activeSession.id
-                        ? 'bg-cyan-500/10 border border-cyan-500/30 text-white font-semibold'
-                        : 'hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="truncate flex-1 pr-2">
-                      <div className="truncate text-[11px]">{s.title}</div>
-                      <div className="text-[9px] text-zinc-600 font-mono">
-                        {s.messages?.length || 0} messages • {new Date(s.updatedAt || s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteSession(s.id, e)}
-                      className="p-1 text-zinc-600 hover:text-rose-400 rounded transition cursor-pointer"
-                      title="Delete session"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Side-Panel Session Action Options */}
-              <div className="pt-2 border-t border-zinc-900 flex items-center justify-between text-[10px] font-mono">
-                <button
-                  onClick={() => {
-                    handleClearCurrentChat();
-                    setIsSessionDropdownOpen(false);
-                  }}
-                  className="px-2 py-1 rounded bg-black hover:bg-zinc-900 text-zinc-400 hover:text-amber-400 border border-zinc-850 flex items-center gap-1 transition cursor-pointer"
-                  title="Clear messages in this session"
-                >
-                  <RotateCcw className="w-2.5 h-2.5" />
-                  <span>Clear Messages</span>
-                </button>
-                <button
-                  onClick={(e) => {
-                    handleDeleteSession(activeSession.id, e);
-                    setIsSessionDropdownOpen(false);
-                  }}
-                  className="px-2 py-1 rounded bg-black hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-850 flex items-center gap-1 transition cursor-pointer"
-                  title="Delete this session"
-                >
-                  <Trash2 className="w-2.5 h-2.5" />
-                  <span>Delete Session</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* IN-SCREEN 4-MODEL SQUAD API KEY BOX (DIRECT INPUT - NO SECRETS MENU) */}
-        {isKeysBoxExpanded && (
-          <div id="halye-in-chat-api-key-box" className="p-3 sm:p-4 bg-zinc-950 border-b border-cyan-500/40 shadow-2xl shrink-0 max-h-[65vh] overflow-y-auto">
-            <div className="max-w-2xl mx-auto space-y-3">
-              <div className="flex items-center justify-between">
+        {/* SESSIONS SIDE DRAWER (Moved away from main screen) */}
+        {isSessionsDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity" 
+              onClick={() => setIsSessionsDrawerOpen(false)}
+            />
+            {/* Drawer Content */}
+            <div className="relative w-80 sm:w-96 max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+              {/* Drawer Header */}
+              <div className="p-4 border-b border-zinc-900 bg-black flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/50 flex items-center justify-center text-cyan-400 shadow-inner">
-                    <Key className="w-4 h-4" />
+                  <div className="w-6 h-6 rounded-lg bg-cyan-950/60 border border-cyan-800/60 flex items-center justify-center text-cyan-400 text-xs font-mono">
+                    <MessageSquare className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wide">
-                        4 Real AI Models Squad API Key Box
-                      </h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
-                        Direct Input • No Secrets!
-                      </span>
-                    </div>
-                    <p className="text-[10px] sm:text-[11px] text-zinc-400">
-                      Kisi bhi boring Secrets menu mein jane ki bilkul zaroorat nahi — yahan direct apni keys enter karein!
-                    </p>
+                    <h3 className="text-xs font-bold text-white">Chat Sessions</h3>
+                    <p className="text-[10px] text-zinc-500 font-mono">{sessions.length} active sessions</p>
                   </div>
                 </div>
-
                 <button
-                  id="halye-hide-keys-box-btn"
-                  onClick={() => setIsKeysBoxExpanded(false)}
-                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition cursor-pointer"
-                  title="Hide Keys Box"
+                  onClick={() => setIsSessionsDrawerOpen(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* 4 Models Badges Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono text-[10px]">
-                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
-                  <div className="text-amber-400 font-bold">🧠 Model 1</div>
-                  <div className="text-white font-semibold truncate text-[10px]">Llama 3.3 70B</div>
-                  <div className="text-zinc-500 text-[8px]">Orchestrator</div>
-                </div>
-                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
-                  <div className="text-emerald-400 font-bold">💻 Model 2</div>
-                  <div className="text-white font-semibold truncate text-[10px]">Qwen 2.5 Coder</div>
-                  <div className="text-zinc-500 text-[8px]">Terminal & Code</div>
-                </div>
-                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
-                  <div className="text-blue-400 font-bold">📐 Model 3</div>
-                  <div className="text-white font-semibold truncate text-[10px]">DeepSeek R1</div>
-                  <div className="text-zinc-500 text-[8px]">Deep Logic & Math</div>
-                </div>
-                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
-                  <div className="text-purple-400 font-bold">⚡ Model 4</div>
-                  <div className="text-white font-semibold truncate text-[10px]">Mixtral 8x22B</div>
-                  <div className="text-zinc-500 text-[8px]">UI Reviewer</div>
-                </div>
+              {/* Add New Session Button */}
+              <div className="p-3 border-b border-zinc-900/80 bg-zinc-950/60">
+                <button
+                  onClick={() => {
+                    handleCreateNewSession();
+                    setIsSessionsDrawerOpen(false);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-98 shadow-sm"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>+ Add New Session</span>
+                </button>
               </div>
 
-              {/* Key Input Form */}
-              <div className="space-y-2.5 bg-black/80 p-3 rounded-xl border border-zinc-850">
-                {/* 1. NVIDIA Key */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-bold text-zinc-200 flex items-center gap-1.5 text-[11px]">
-                      <span>1. NVIDIA NIM API Key (Master Key)</span>
-                      <span className="text-[9px] text-cyan-400 font-mono bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-900/60">
-                        ⭐ 1 Key Powers All 4 Models
-                      </span>
-                    </label>
-                    {keysConfiguredStatus?.nvidia?.configured && (
-                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Active: {keysConfiguredStatus.nvidia.masked}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
-                    <input
-                      id="in-chat-nvidia-input"
-                      type={showInChatNvidia ? 'text' : 'password'}
-                      value={inChatNvidiaKey}
-                      onChange={(e) => setInChatNvidiaKey(e.target.value)}
-                      placeholder={keysConfiguredStatus?.nvidia?.configured ? 'Active key saved. Type here to replace.' : 'nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowInChatNvidia(!showInChatNvidia)}
-                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+              {/* Session List */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {sessions.map((s) => {
+                  const isActive = s.id === activeSession.id;
+                  const isEditing = editingSessionId === s.id;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`p-3 rounded-xl border transition group ${
+                        isActive
+                          ? 'bg-zinc-900/90 border-cyan-500/50 shadow-sm'
+                          : 'bg-black/50 hover:bg-zinc-900/40 border-zinc-900 hover:border-zinc-800'
+                      }`}
                     >
-                      {showInChatNvidia ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <p className="text-[9px] text-zinc-500">
-                    Free 1,000 credits key: <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">build.nvidia.com</a> se milti hai.
-                  </p>
-                </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div 
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => {
+                            setActiveSessionId(s.id);
+                            setIsSessionsDrawerOpen(false);
+                          }}
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                value={editingTitleText}
+                                onChange={(e) => setEditingTitleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveRenameSession(s.id);
+                                  if (e.key === 'Escape') setEditingSessionId(null);
+                                }}
+                                className="w-full px-2 py-1 rounded bg-black border border-cyan-500 text-xs text-white font-sans focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleSaveRenameSession(s.id)}
+                                className="p-1 rounded bg-cyan-500 text-black hover:bg-cyan-400 transition"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-semibold truncate ${isActive ? 'text-cyan-400' : 'text-zinc-200'}`}>
+                                {s.title}
+                              </span>
+                              {isActive && (
+                                <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[9px] font-mono">
+                                  Current
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-zinc-500 font-mono mt-1 flex items-center gap-2">
+                            <span>{s.messages?.length || 0} msgs</span>
+                            <span>•</span>
+                            <span>{new Date(s.updatedAt || s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
 
-                {/* 2. Google Gemini Key */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-bold text-zinc-300 flex items-center gap-1 text-[11px]">
-                      <span>2. Google Gemini API Key</span>
-                      <span className="text-[9px] text-zinc-500 font-mono">(Optional)</span>
-                    </label>
-                    {keysConfiguredStatus?.gemini?.configured && (
-                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Active: {keysConfiguredStatus.gemini.masked}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
-                    <input
-                      id="in-chat-gemini-input"
-                      type={showInChatGemini ? 'text' : 'password'}
-                      value={inChatGeminiKey}
-                      onChange={(e) => setInChatGeminiKey(e.target.value)}
-                      placeholder={keysConfiguredStatus?.gemini?.configured ? 'Active key saved. Type here to replace.' : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowInChatGemini(!showInChatGemini)}
-                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
-                    >
-                      {showInChatGemini ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
+                        {/* Action icons: Rename & Delete */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isEditing && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingSessionId(s.id);
+                                setEditingTitleText(s.title);
+                              }}
+                              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition cursor-pointer"
+                              title="Rename session"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => handleDeleteSession(s.id, e)}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition cursor-pointer"
+                            title="Delete session"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-                {/* 3 & 4. Groq and OpenRouter */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-zinc-400">3. Groq API Key (Optional)</label>
-                    <input
-                      id="in-chat-groq-input"
-                      type="password"
-                      value={inChatGroqKey}
-                      onChange={(e) => setInChatGroqKey(e.target.value)}
-                      placeholder={keysConfiguredStatus?.groq?.configured ? 'Active' : 'gsk_...'}
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg px-2 py-1 text-xs text-white font-mono placeholder:text-zinc-600 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-zinc-400">4. OpenRouter Key (Optional)</label>
-                    <input
-                      id="in-chat-openrouter-input"
-                      type="password"
-                      value={inChatOpenRouterKey}
-                      onChange={(e) => setInChatOpenRouterKey(e.target.value)}
-                      placeholder={keysConfiguredStatus?.openrouter?.configured ? 'Active' : 'sk-or-...'}
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg px-2 py-1 text-xs text-white font-mono placeholder:text-zinc-600 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Feedback Message */}
-                {inChatKeySaveMsg && (
-                  <div className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
-                    inChatKeySaveMsg.success ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950/50 text-rose-300 border border-rose-500/40'
-                  }`}>
-                    {inChatKeySaveMsg.success ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
-                    <span>{inChatKeySaveMsg.text}</span>
-                  </div>
-                )}
-
-                {/* Action Row */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 border-t border-zinc-900">
-                  <p className="text-[9px] text-zinc-500 text-center sm:text-left">
-                    💡 <strong>Direct Chat Hint:</strong> Aap chat input me bhi <code className="text-cyan-400">nvapi-...</code> likh kar bhej sakti hain!
-                  </p>
-                  <button
-                    id="save-in-chat-keys-btn"
-                    type="button"
-                    onClick={handleSaveInChatKeys}
-                    disabled={isSavingInChatKeys}
-                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95 disabled:opacity-50"
-                  >
-                    <Key className="w-3.5 h-3.5 fill-current" />
-                    <span>{isSavingInChatKeys ? 'Saving Keys...' : 'Save & Connect 4 Models'}</span>
-                  </button>
-                </div>
+              {/* Drawer Footer Actions */}
+              <div className="p-3 border-t border-zinc-900 bg-black flex items-center justify-between gap-2 text-xs font-mono">
+                <button
+                  onClick={() => {
+                    handleClearCurrentChat();
+                    setIsSessionsDrawerOpen(false);
+                  }}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-amber-400 border border-zinc-800 flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                  title="Clear messages in active session"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Clear Chat</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    handleDeleteSession(activeSession.id, e);
+                  }}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-800 flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                  title="Delete active session"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Session</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1556,24 +1393,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs scroll-smooth flex flex-col"
           onPaste={handlePaste}
         >
-          {conversation.length === 0 && !isKeysBoxExpanded && (
-            <div className="flex-1 flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full my-auto space-y-3 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-cyan-400 shadow-inner">
-                <Key className="w-6 h-6 text-cyan-400" />
-              </div>
-              <h2 className="text-base font-extrabold text-white">4 Real AI Models Squad Ready</h2>
-              <p className="text-xs text-zinc-400">
-                Llama 3.3 70B, Qwen 2.5 Coder 32B, DeepSeek R1 aur Mixtral 8x22B live active hain.
-              </p>
-              <button
-                onClick={() => setIsKeysBoxExpanded(true)}
-                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 text-cyan-300 text-xs font-mono transition cursor-pointer shadow-lg flex items-center gap-2 active:scale-95"
-              >
-                <Key className="w-4 h-4 text-cyan-400" />
-                <span>Open API Keys Box (Write Keys Here)</span>
-              </button>
-            </div>
-          )}
 
           {conversation.map((msg) => (
             <div
@@ -1652,21 +1471,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
                 {/* Message Body */}
                 <p className="whitespace-pre-wrap leading-relaxed text-zinc-300 font-sans">{msg.text}</p>
-
-                {/* API Key Action Button if keys are required or missing */}
-                {((msg.text && (msg.text.includes('API Key') || msg.text.includes('API key'))) || (msg as any).needsApiKey) && (
-                  <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] text-amber-300 font-medium">Real AI Models require an active API key to connect</span>
-                    <button
-                      type="button"
-                      onClick={() => onOpenApiKey ? onOpenApiKey() : setIsApiKeyModalOpen(true)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md active:scale-95"
-                    >
-                      <Key className="w-3.5 h-3.5 fill-current" />
-                      <span>Configure API Keys</span>
-                    </button>
-                  </div>
-                )}
 
                 {/* Action Taken & Model Tag */}
                 {(msg.actionTaken || msg.model) && (
@@ -1760,13 +1564,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                      {/* Llama 3.3 70B: Orchestrator */}
+                      {/* Google Gemma 4 31B: Lead Architect & Orchestrator */}
                       <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                         <div className="flex items-center justify-between text-zinc-400">
-                          <span className="text-amber-400 font-bold flex items-center gap-1">
-                            <span>🧠</span> Orchestrator
+                          <span className="text-cyan-400 font-bold flex items-center gap-1">
+                            <span>💎</span> Gemma 4 (31B Dense)
                           </span>
-                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.orchestrator.model || 'Llama 3.3 70B'}</span>
+                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.orchestrator.model || 'google/gemma-4-31b-it'}</span>
                         </div>
                         <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                           {msg.pipeline.orchestrator.plan}
@@ -1775,24 +1579,24 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                           <div className="space-y-1 pt-1">
                             {msg.pipeline.orchestrator.steps.map((step, sIdx) => (
                               <div key={sIdx} className="text-zinc-400 text-[10px] flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
                                 <span className="truncate">{step}</span>
                               </div>
                             ))}
                           </div>
                         )}
                         <div className="pt-1 text-[9px] text-zinc-500">
-                          Delegated to: <span className="text-cyan-400 font-bold">{msg.pipeline.orchestrator.delegatedTo}</span>
+                          Delegated to: <span className="text-emerald-400 font-bold">{msg.pipeline.orchestrator.delegatedTo}</span>
                         </div>
                       </div>
 
-                      {/* Qwen 2.5 Coder 32B: Execution Master */}
+                      {/* Poolside Laguna XS 2.1: Terminal & Raw Execution Master */}
                       <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                         <div className="flex items-center justify-between text-zinc-400">
                           <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <span>⚡</span> Execution Master
+                            <span>⚡</span> Laguna XS (33B MoE)
                           </span>
-                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.executionMaster?.model || 'Qwen 2.5 Coder 32B'}</span>
+                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.executionMaster?.model || 'poolside/laguna-xs-2.1'}</span>
                         </div>
                         <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                           {msg.pipeline.executionMaster?.actionSummary || 'Direct physical tool automation and self-healing active.'}
@@ -1809,14 +1613,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       </div>
 
-                      {/* DeepSeek R1: Deep Logic */}
+                      {/* DeepSeek V4 Pro: Deep Logic & Code Synthesizer */}
                       {msg.pipeline.deepReasoner && (
                         <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                           <div className="flex items-center justify-between text-zinc-400">
                             <span className="text-indigo-400 font-bold flex items-center gap-1">
-                              <span>📐</span> Deep Logic & Code
+                              <span>🧠</span> DeepSeek V4 (1M MoE)
                             </span>
-                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.deepReasoner.model || 'DeepSeek R1'}</span>
+                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.deepReasoner.model || 'deepseek-ai/deepseek-v4-pro-0813'}</span>
                           </div>
                           <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                             {msg.pipeline.deepReasoner.summary || 'Contextual code architecture verified.'}
@@ -1824,14 +1628,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       )}
 
-                      {/* Mixtral 8x22B: UI Reviewer */}
+                      {/* MiniMax M3: UI Reviewer & Multimodal QA */}
                       {msg.pipeline.reviewer && (
                         <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                           <div className="flex items-center justify-between text-zinc-400">
                             <span className="text-fuchsia-400 font-bold flex items-center gap-1">
-                              <span>🎨</span> UI Reviewer
+                              <span>👁️</span> MiniMax M3 (Multimodal)
                             </span>
-                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.reviewer.model || 'Mixtral 8x22B'}</span>
+                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.reviewer.model || 'minimaxai/minimax-m3'}</span>
                           </div>
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-zinc-400 text-[10px]">Syntax Score:</span>
@@ -1839,6 +1643,70 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4-Model Inter-Agent Live Dialogue Card */}
+                {((msg.dialogue && msg.dialogue.length > 0) || (msg.pipeline?.dialogue && msg.pipeline.dialogue.length > 0)) && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/40 p-3 space-y-2.5 font-mono text-[11px] shadow-lg shadow-cyan-950/20">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-cyan-400" />
+                        <span className="font-bold text-white tracking-wide">4-Model Inter-Agent Live Conversation</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[9px] font-bold">
+                        COLLABORATION DIALOGUE
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(msg.dialogue || msg.pipeline?.dialogue || []).map((dItem: any, dIdx: number) => (
+                        <div
+                          key={dIdx}
+                          className="p-2.5 rounded-xl bg-black/80 border border-zinc-900 flex items-start gap-2.5 hover:border-zinc-800 transition"
+                        >
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 border"
+                            style={{
+                              borderColor: `${dItem.color}40`,
+                              backgroundColor: `${dItem.color}15`,
+                            }}
+                          >
+                            {dItem.avatar}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center justify-between gap-1 flex-wrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-xs" style={{ color: dItem.color }}>
+                                  {dItem.name}
+                                </span>
+                                <span className="text-[9px] text-zinc-500 font-mono">
+                                  ({dItem.role})
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-mono">
+                                <span className="text-cyan-400 font-semibold">{dItem.targetAgent}</span>
+                                {dItem.timestamp && <span>• {dItem.timestamp}</span>}
+                              </div>
+                            </div>
+                            <p className="text-zinc-300 font-sans text-xs leading-relaxed">
+                              {dItem.speech}
+                            </p>
+                            {dItem.toolExecuted && (
+                              <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono text-emerald-400">
+                                <Terminal className="w-3 h-3" />
+                                <span>Tool: {dItem.toolExecuted}</span>
+                                {dItem.toolOutput && (
+                                  <span className="text-zinc-500 truncate max-w-xs">
+                                    → {dItem.toolOutput}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2229,44 +2097,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           </div>
         )}
 
-        {/* Quick Developer Action Chips */}
-        <div className="px-3 pt-2 bg-black border-t border-zinc-900/80 flex items-center gap-1.5 overflow-x-auto text-[11px] font-mono select-none">
-          <button
-            type="button"
-            onClick={() => screenshotInputRef.current?.click()}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-400 border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
-            title="Upload screenshot for vision perception"
-          >
-            <ImageIcon className="w-3 h-3" />
-            <span>+ Screenshot</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsKeysBoxExpanded(!isKeysBoxExpanded)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border shrink-0 transition cursor-pointer active:scale-95 ${
-              isKeysBoxExpanded
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-sm'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white border-zinc-800 hover:border-cyan-500/40'
-            }`}
-            title="Open or close API Keys Box (Write Here)"
-          >
-            <Key className="w-3 h-3 text-cyan-400" />
-            <span>Keys Box (Write Here)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClearCurrentChat}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
-            title="Clear all messages from chat"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Clear All Messages</span>
-          </button>
-        </div>
-
-        {/* Unified Input Bar with PLUS (+) Icon & MODEL SWAPPER */}
+        {/* Unified Input Bar with PLUS (+) Icon & MODEL / API KEYS SWAPPER */}
         <div className="p-3 border-t border-zinc-900 bg-black flex items-end gap-2">
           {/* THE REQUESTED PLUS (+) BUTTON FOR SCREENSHOTS & FILES */}
           <button
@@ -2279,7 +2110,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             <Plus className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          {/* MODEL SWAP DROP-UP NEXT TO PLUS BUTTON */}
+          {/* MODEL & API KEYS SWAP DROP-UP */}
           <div className="relative shrink-0">
             {(() => {
               const currentModelObj =
@@ -2291,7 +2122,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     id="halye-model-swap-btn"
                     type="button"
                     onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
-                    title="Click to swap AI model (Only the chosen model will run, or choose All 4 Models together)"
+                    title="Click to swap AI model, activate God Mode, or configure API Keys"
                     className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono select-none active:scale-95"
                   >
                     <span className="text-sm">{currentModelObj.icon}</span>
@@ -2305,80 +2136,452 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     />
                   </button>
 
-                  {/* UPWARD DROPDOWN MENU */}
+                  {/* UPWARD MODELS & API KEYS MODAL / POPOVER */}
                   {isModelSelectorOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-72 sm:w-84 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-2 z-50 space-y-1.5">
-                      <div className="px-2.5 py-1.5 border-b border-zinc-900 flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                        <span className="font-bold text-zinc-200">SWAP AI MODEL</span>
-                        <span className="text-emerald-400 font-bold">LOCKED SELECTION</span>
-                      </div>
-                      <div className="space-y-1 max-h-72 overflow-y-auto">
-                        {HALYE_CORE_MODELS.map((m) => {
-                          const isSelected = (modelInfo?.activeModel || 'squad-ensemble') === m.id;
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => {
-                                handleQuickModelSwap(m.id);
-                                setIsModelSelectorOpen(false);
-                              }}
-                              className={`w-full text-left p-2 rounded-xl transition cursor-pointer flex items-start gap-2.5 ${
-                                isSelected
-                                  ? 'bg-zinc-900 border border-zinc-700 text-white shadow-sm'
-                                  : 'hover:bg-zinc-900/60 text-zinc-300 hover:text-white border border-transparent'
-                              }`}
-                            >
-                              <div className="text-base mt-0.5 shrink-0">{m.icon}</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="font-bold text-xs truncate">{m.name}</span>
-                                  <span
-                                    className={`text-[9px] px-1.5 py-0.5 rounded border font-mono shrink-0 ${m.badgeColor}`}
-                                  >
-                                    {m.badge}
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">{m.desc}</p>
-                              </div>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 mt-1 shrink-0" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Config Keys Option in Dropdown */}
-                      <div className="pt-1.5 border-t border-zinc-900">
+                    <div className="absolute bottom-full left-0 mb-2 w-84 sm:w-[420px] max-h-[580px] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 z-50 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
+                      {/* Top Tabs: Models vs API Keys */}
+                      <div className="flex items-center justify-between border-b border-zinc-850 pb-2 shrink-0">
+                        <div className="flex items-center gap-1 bg-black p-1 rounded-xl border border-zinc-850">
+                          <button
+                            type="button"
+                            onClick={() => setModelSelectorTab('models')}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                              modelSelectorTab === 'models'
+                                ? 'bg-zinc-800 text-cyan-400 shadow-sm'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            🤖 Models &amp; God Mode
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModelSelectorTab('keys')}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                              modelSelectorTab === 'keys'
+                                ? 'bg-zinc-800 text-cyan-400 shadow-sm'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <Key className="w-3 h-3" />
+                            <span>4 Model Keys</span>
+                            {(hasNvidiaKeyConfigured || Object.values(modelKeyStatuses).some(s => s.configured)) && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            )}
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            setIsModelSelectorOpen(false);
-                            setIsApiKeyModalOpen(true);
-                          }}
-                          className="w-full py-1.5 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-cyan-300 border border-zinc-800 flex items-center justify-center gap-1.5 text-[11px] font-mono transition cursor-pointer"
+                          onClick={() => setIsModelSelectorOpen(false)}
+                          className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition cursor-pointer"
                         >
-                          <Key className="w-3.5 h-3.5" />
-                          <span>Enter API Keys & GitHub Secrets</span>
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
+
+                      {/* TAB 1: MODELS & GOD MODE SELECTION WITH PER-MODEL KEY BOX */}
+                      {modelSelectorTab === 'models' && (
+                        <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[480px]">
+                          <div className="px-1 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                            <span>SELECT EXECUTION OR CLICK 🔑 TO CONFIGURE KEY</span>
+                            <span className="text-cyan-400 font-bold">4 Models</span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {HALYE_CORE_MODELS.map((m) => {
+                              const isSelected = (modelInfo?.activeModel || 'squad-ensemble') === m.id;
+                              const isGodMode = m.id === 'squad-ensemble';
+                              const isKeyOpen = editingKeyForModel === m.id;
+
+                              // Map model id to key state
+                              let currentKeyVal = '';
+                              let keySetter: (v: string) => void = () => {};
+                              let isKeyShow = false;
+                              let toggleKeyShow = () => {};
+                              let keyLookupKey = '';
+
+                              if (m.id.includes('gemma')) {
+                                currentKeyVal = gemmaKeyInput;
+                                keySetter = setGemmaKeyInput;
+                                isKeyShow = showGemmaKey;
+                                toggleKeyShow = () => setShowGemmaKey(!showGemmaKey);
+                                keyLookupKey = 'gemma';
+                              } else if (m.id.includes('laguna')) {
+                                currentKeyVal = lagunaKeyInput;
+                                keySetter = setLagunaKeyInput;
+                                isKeyShow = showLagunaKey;
+                                toggleKeyShow = () => setShowLagunaKey(!showLagunaKey);
+                                keyLookupKey = 'laguna';
+                              } else if (m.id.includes('deepseek')) {
+                                currentKeyVal = deepseekKeyInput;
+                                keySetter = setDeepseekKeyInput;
+                                isKeyShow = showDeepseekKey;
+                                toggleKeyShow = () => setShowDeepseekKey(!showDeepseekKey);
+                                keyLookupKey = 'deepseek';
+                              } else if (m.id.includes('minimax')) {
+                                currentKeyVal = minimaxKeyInput;
+                                keySetter = setMinimaxKeyInput;
+                                isKeyShow = showMinimaxKey;
+                                toggleKeyShow = () => setShowMinimaxKey(!showMinimaxKey);
+                                keyLookupKey = 'minimax';
+                              }
+
+                              const isConfigured = Boolean(
+                                (keyLookupKey && modelKeyStatuses[keyLookupKey]?.configured) ||
+                                hasNvidiaKeyConfigured
+                              );
+
+                              return (
+                                <div
+                                  key={m.id}
+                                  className={`rounded-xl border transition ${
+                                    isSelected
+                                      ? isGodMode
+                                        ? 'bg-amber-950/30 border-amber-500/60 shadow-md shadow-amber-950/20'
+                                        : 'bg-zinc-900 border-cyan-500/50 shadow-md shadow-cyan-950/20'
+                                      : 'bg-black/50 border-zinc-850 hover:border-zinc-700'
+                                  } p-2.5 space-y-2`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    {/* Left: Model icon & click to activate */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleQuickModelSwap(m.id);
+                                        if (!isGodMode) {
+                                          setEditingKeyForModel(editingKeyForModel === m.id ? null : m.id);
+                                        }
+                                      }}
+                                      className="flex items-start gap-2.5 text-left flex-1 min-w-0 cursor-pointer"
+                                    >
+                                      <div className="text-xl mt-0.5 shrink-0">{m.icon}</div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-bold text-xs text-white truncate">{m.name}</span>
+                                          <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono ${m.badgeColor}`}>
+                                            {m.badge}
+                                          </span>
+                                        </div>
+                                        <p className="text-[10px] text-zinc-400 line-clamp-2 mt-0.5 leading-relaxed">
+                                          {m.desc}
+                                        </p>
+                                        <div className="mt-1 flex items-center gap-2 text-[9px] font-mono text-zinc-500">
+                                          <span>{m.provider}</span>
+                                          {isGodMode ? (
+                                            <span className="text-amber-400 font-semibold">• 4-Agent God Mode Combo</span>
+                                          ) : (
+                                            <span className="text-emerald-400 font-semibold">• Solo Raw Powers</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </button>
+
+                                    {/* Right: Actions (Select check & Key toggle button) */}
+                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                      {isSelected ? (
+                                        <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-cyan-400 bg-cyan-950/50 border border-cyan-500/40 px-1.5 py-0.5 rounded-md">
+                                          <Check className="w-3 h-3" /> ACTIVE
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickModelSwap(m.id)}
+                                          className="text-[9px] font-mono text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-0.5 rounded-md cursor-pointer transition"
+                                        >
+                                          Select
+                                        </button>
+                                      )}
+
+                                      {!isGodMode && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingKeyForModel(isKeyOpen ? null : m.id)}
+                                          title={`Click to open ${m.shortName} API Key box`}
+                                          className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-md border cursor-pointer transition ${
+                                            isKeyOpen
+                                              ? 'bg-cyan-500 text-black font-bold border-cyan-400'
+                                              : isConfigured
+                                              ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/40'
+                                              : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/40'
+                                          }`}
+                                        >
+                                          <Key className="w-2.5 h-2.5" />
+                                          <span>{isKeyOpen ? 'Close Key' : isConfigured ? 'Key ✓' : 'Add Key'}</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* INLINE DEDICATED API KEY BOX (Opens when model is clicked or Add Key clicked) */}
+                                  {!isGodMode && isKeyOpen && (
+                                    <div className="pt-2 border-t border-zinc-800 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                                      <div className="flex items-center justify-between text-[10px] font-mono">
+                                        <span className="text-cyan-400 font-bold flex items-center gap-1">
+                                          <Key className="w-3 h-3" />
+                                          <span>Dedicated API Key for {m.name}</span>
+                                        </span>
+                                        <span className={`text-[9px] font-bold ${isConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                          {isConfigured ? '✓ Key Active' : 'Key Required'}
+                                        </span>
+                                      </div>
+
+                                      <div className="relative">
+                                        <input
+                                          type={isKeyShow ? 'text' : 'password'}
+                                          value={currentKeyVal}
+                                          onChange={(e) => keySetter(e.target.value)}
+                                          placeholder={`Enter API Key for ${m.shortName} (nvapi-... or sk-...)`}
+                                          className="w-full bg-black border border-zinc-750 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none pr-8"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={toggleKeyShow}
+                                          className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                                        >
+                                          {isKeyShow ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                        </button>
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                                        <span className="text-[9px] text-zinc-500 font-mono">
+                                          Stored securely in backend environment
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveSingleModelKey(m.id, currentKeyVal)}
+                                          disabled={isSavingKeys}
+                                          className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-[10px] font-mono flex items-center gap-1 transition cursor-pointer active:scale-95"
+                                        >
+                                          {isSavingKeys ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 stroke-[2.5]" />}
+                                          <span>Save Key</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {keySaveMessage && (
+                            <div className={`p-2 rounded-lg text-[10px] font-mono ${
+                              keySaveMessage.startsWith('✓') 
+                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50' 
+                                : 'bg-rose-950/40 text-rose-300 border border-rose-800/50'
+                            }`}>
+                              {keySaveMessage}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* TAB 2: ALL 4 MODEL API KEYS INPUTS */}
+                      {modelSelectorTab === 'keys' && (
+                        <div className="space-y-3 overflow-y-auto pr-1 max-h-[480px] py-1">
+                          <div className="text-[10px] font-mono text-zinc-400">
+                            Configure individual API keys for all 4 frontier models or enter the master NVIDIA key:
+                          </div>
+
+                          {/* 1. Google Gemma 4 Key */}
+                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                                <span>💎</span> Google Gemma 4 (31B) Key
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                modelKeyStatuses.gemma?.configured || hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {modelKeyStatuses.gemma?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showGemmaKey ? 'text' : 'password'}
+                                value={gemmaKeyInput}
+                                onChange={(e) => setGemmaKeyInput(e.target.value)}
+                                placeholder="Gemma 4 API Key (nvapi-...)"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-cyan-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowGemmaKey(!showGemmaKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showGemmaKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 2. Poolside Laguna XS Key */}
+                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                                <span>⚡</span> Poolside Laguna XS (33B) Key
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                modelKeyStatuses.laguna?.configured || hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {modelKeyStatuses.laguna?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showLagunaKey ? 'text' : 'password'}
+                                value={lagunaKeyInput}
+                                onChange={(e) => setLagunaKeyInput(e.target.value)}
+                                placeholder="Laguna XS API Key (nvapi-...)"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-emerald-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowLagunaKey(!showLagunaKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showLagunaKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 3. DeepSeek V4 Key */}
+                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-indigo-400 flex items-center gap-1.5">
+                                <span>🧠</span> DeepSeek V4 Pro (1M MoE) Key
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                modelKeyStatuses.deepseek?.configured || hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {modelKeyStatuses.deepseek?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showDeepseekKey ? 'text' : 'password'}
+                                value={deepseekKeyInput}
+                                onChange={(e) => setDeepseekKeyInput(e.target.value)}
+                                placeholder="DeepSeek V4 API Key (nvapi-... or sk-...)"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-indigo-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowDeepseekKey(!showDeepseekKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showDeepseekKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 4. MiniMax M3 Key */}
+                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-fuchsia-400 flex items-center gap-1.5">
+                                <span>👁️</span> MiniMax M3 (Multimodal MoE) Key
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                modelKeyStatuses.minimax?.configured || hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {modelKeyStatuses.minimax?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showMinimaxKey ? 'text' : 'password'}
+                                value={minimaxKeyInput}
+                                onChange={(e) => setMinimaxKeyInput(e.target.value)}
+                                placeholder="MiniMax M3 API Key (nvapi-...)"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-fuchsia-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowMinimaxKey(!showMinimaxKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showMinimaxKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Master NVIDIA NIM API Key */}
+                          <div className="p-2.5 rounded-xl bg-cyan-950/10 border border-cyan-500/30 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-white flex items-center gap-1.5">
+                                <span>🌐</span> Master NVIDIA NIM Key (Universal)
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {hasNvidiaKeyConfigured ? '✓ Master Active' : 'Key Needed'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-400">
+                              Powers all 4 models simultaneously if you have one NVIDIA Build key.
+                            </p>
+                            <div className="relative">
+                              <input
+                                type={showNimKey ? 'text' : 'password'}
+                                value={nvidiaNimKeyInput}
+                                onChange={(e) => setNvidiaNimKeyInput(e.target.value)}
+                                placeholder="nvapi-..."
+                                className="w-full bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-cyan-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNimKey(!showNimKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showNimKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {keySaveMessage && (
+                            <div className={`p-2 rounded-lg text-[10px] font-mono ${
+                              keySaveMessage.startsWith('✓') 
+                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50' 
+                                : 'bg-rose-950/40 text-rose-300 border border-rose-800/50'
+                            }`}>
+                              {keySaveMessage}
+                            </div>
+                          )}
+
+                          <div className="pt-1 flex items-center justify-between gap-2">
+                            <a
+                              href="https://build.nvidia.com"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-cyan-400 hover:underline font-mono flex items-center gap-1"
+                            >
+                              <span>build.nvidia.com</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={handleSaveModelKeys}
+                              disabled={isSavingKeys}
+                              className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-xs font-mono flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
+                            >
+                              {isSavingKeys ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                              <span>Save All 4 Keys</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
               );
             })()}
           </div>
-
-          {/* DEDICATED API KEYS BUTTON NEXT TO MODEL SWAPPER */}
-          <button
-            id="halye-api-keys-input-btn"
-            type="button"
-            onClick={() => setIsApiKeyModalOpen(true)}
-            title="Open API Keys & GitHub Secrets Box"
-            className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/40 text-cyan-400 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono active:scale-95"
-          >
-            <Key className="w-4 h-4" />
-            <span className="hidden xl:inline font-bold">API Keys</span>
-          </button>
 
           {/* Text Input Area */}
           <textarea
@@ -3157,29 +3360,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           }}
         />
       )}
-
-      {/* API Keys & GitHub Secrets Modal */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        onKeysUpdated={() => {
-          // Re-fetch model info
-          fetch('/api/model/status')
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.success) {
-                setModelInfo({
-                  status: d.status,
-                  provider: d.provider,
-                  activeModel: d.activeModel,
-                  hasVision: d.hasVision,
-                  hasTerminal: d.hasTerminal,
-                });
-              }
-            })
-            .catch(() => {});
-        }}
-      />
     </div>
   );
 };
