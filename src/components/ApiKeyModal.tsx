@@ -199,21 +199,54 @@ NODE_ENV=production`;
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {activeTab === 'keys' ? (
             <>
-              {/* Squad banner */}
-              <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800 text-xs text-zinc-300 flex items-start gap-3">
-                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-white">
-                    1 Key for All 4 Models (NVIDIA NIM)
-                  </p>
-                  <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    Apni <strong>NVIDIA API Key</strong> enter karein jo direct chaaron models ko power karti hai:
-                    <span className="text-amber-300 font-mono"> Gemma 4 (31B)</span>,
-                    <span className="text-emerald-300 font-mono"> Laguna XS (33B)</span>,
-                    <span className="text-blue-300 font-mono"> DeepSeek V4 Pro</span>, aur
-                    <span className="text-purple-300 font-mono"> MiniMax M3</span>.
-                  </p>
+              {/* Squad banner & 4 Models Grid */}
+              <div className="p-4 rounded-xl bg-zinc-900/90 border border-cyan-500/30 text-xs text-zinc-300 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    <span className="font-bold text-white text-sm">
+                      4 Real AI Models Squad Activation
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 font-mono text-[10px]">
+                    Zero Fake Responses
+                  </span>
                 </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+                  <div className="p-2 rounded-lg bg-black border border-zinc-800">
+                    <div className="text-amber-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>🧠</span> Model 1
+                    </div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Llama 3.3 70B</div>
+                    <div className="text-zinc-500 text-[9px]">Lead Orchestrator</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-black border border-zinc-800">
+                    <div className="text-emerald-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>💻</span> Model 2
+                    </div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Qwen 2.5 Coder</div>
+                    <div className="text-zinc-500 text-[9px]">Terminal Master</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-black border border-zinc-800">
+                    <div className="text-blue-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>📐</span> Model 3
+                    </div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">DeepSeek R1</div>
+                    <div className="text-zinc-500 text-[9px]">Deep Logic</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-black border border-zinc-800">
+                    <div className="text-purple-400 font-bold flex items-center gap-1 text-[10px]">
+                      <span>⚡</span> Model 4
+                    </div>
+                    <div className="text-white font-semibold truncate text-[11px] mt-0.5">Mixtral 8x22B</div>
+                    <div className="text-zinc-500 text-[9px]">UI Reviewer</div>
+                  </div>
+                </div>
+
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  💡 <strong>Tip:</strong> Sirf <strong>1 NVIDIA NIM API Key (<code className="text-cyan-300">nvapi-...</code>)</strong> in chaaron (4) models ko ek sath live connect kar deti hai! (Free credits from <em>build.nvidia.com</em>). Aap Google Gemini, Groq ya OpenRouter key bhi use kar sakte hain.
+                </p>
               </div>
 
               {/* 1. NVIDIA Key */}

@@ -19,6 +19,7 @@ import {
   FileText,
   X,
   Eye,
+  EyeOff,
   Sparkles,
   Command,
   Maximize2,
@@ -65,47 +66,56 @@ export const HALYE_CORE_MODELS = [
   {
     id: 'squad-ensemble',
     name: 'All 4 Models Squad (Collaborative Ensemble)',
-    shortName: '⚡ All 4 Models',
-    badge: '4-Model Squad',
+    shortName: '⚡ 4-Model Squad',
+    badge: 'Real Multi-Agent',
     badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
     icon: '⚡',
-    desc: 'Gemma 4 (Plan) + Laguna XS (Exec) + DeepSeek V4 (Code) + MiniMax M3 (UI)',
+    desc: 'Llama 3.3 70B (Plan) + Qwen Coder (Exec) + DeepSeek R1 (Code) + Mixtral 8x22B (UI)',
   },
   {
-    id: 'google/gemma-4-31b-it',
-    name: 'Gemma 4 31B IT (Solo Brain)',
-    shortName: '🧠 Gemma 4',
-    badge: '31B Orchestrator',
+    id: 'meta/llama-3.3-70b-instruct',
+    name: 'Llama 3.3 70B Instruct (Solo Brain & Planner)',
+    shortName: '🧠 Llama 3.3 70B',
+    badge: '70B Orchestrator',
     badgeColor: 'text-amber-400 bg-amber-950/60 border-amber-800/60',
     icon: '🧠',
-    desc: 'Architecture design, task decomposition, and Roman Urdu planning',
+    desc: 'Task decomposition, architecture planning, and Roman Urdu reasoning',
   },
   {
-    id: 'poolside/laguna-xs-2.1',
-    name: 'Laguna XS 2.1 (Solo Terminal Master)',
-    shortName: '💻 Laguna XS',
-    badge: '33B Terminal',
+    id: 'qwen/qwen2.5-coder-32b-instruct',
+    name: 'Qwen 2.5 Coder 32B (Solo Terminal Master)',
+    shortName: '💻 Qwen Coder 32B',
+    badge: 'Terminal Master',
     badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60',
     icon: '💻',
     desc: 'Autonomous Linux bash, Python 3, pip, and agentic tool loop',
   },
   {
-    id: 'deepseek-ai/deepseek-v4-pro-0813',
-    name: 'DeepSeek V4 Pro (Solo Code Architecture)',
-    shortName: '📐 DeepSeek V4',
-    badge: 'Deep Logic',
+    id: 'deepseek-ai/deepseek-r1',
+    name: 'DeepSeek R1 (Solo Reasoning & Code)',
+    shortName: '📐 DeepSeek R1',
+    badge: 'Reasoning R1',
     badgeColor: 'text-blue-400 bg-blue-950/60 border-blue-800/60',
     icon: '📐',
-    desc: 'Massive context code synthesis, full-stack state, and algorithms',
+    desc: 'Frontier reasoning engine for massive code context, algorithms, and deep logic',
   },
   {
-    id: 'minimaxai/minimax-m3',
-    name: 'MiniMax M3 (Solo UI & Rapid Fixes)',
-    shortName: '⚡ MiniMax M3',
+    id: 'mistralai/mixtral-8x22b-instruct-v0.1',
+    name: 'Mixtral 8x22B (Solo UI & Rapid Fixes)',
+    shortName: '⚡ Mixtral 8x22B',
     badge: 'UI & Fixes',
     badgeColor: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
     icon: '⚡',
-    desc: 'UI layout review, DOM syntax repair, and pure AMOLED styling',
+    desc: 'Rapid UI layout review, DOM syntax repair, and pure AMOLED styling',
+  },
+  {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash (Google DeepMind)',
+    shortName: '✨ Gemini Flash',
+    badge: 'Google AI',
+    badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
+    icon: '✨',
+    desc: 'Ultra-fast text, reasoning, and multimodal image analysis',
   },
 ];
 
@@ -117,6 +127,7 @@ interface HalyeStudioProps {
   attachedAssetsCount?: number;
   onOpenGithub: () => void;
   onOpenAssets: () => void;
+  onOpenApiKey?: () => void;
 }
 
 export const HalyeStudio: React.FC<HalyeStudioProps> = ({
@@ -125,6 +136,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   attachedAssetsCount = 1,
   onOpenGithub,
   onOpenAssets,
+  onOpenApiKey,
 }) => {
   // Main Builder & Sandbox State
   const [code, setCode] = useState<string>(initialCode || DEFAULT_HALYE_CODE);
@@ -213,16 +225,11 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     { cmd: 'uname -a', out: 'Linux halye-container 6.6.137+ #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux', err: '', exit: 0, ms: 8 }
   ]);
 
-  // Multi-Session Chat Memory State (Isolated Per-Session History)
+  // Multi-Session Chat Memory State (Clean & Fresh, Zero Simulated/Fake Messages)
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     try {
-      const saved = localStorage.getItem('halye_sessions_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
+      localStorage.removeItem('halye_sessions_v1');
+      localStorage.removeItem('halye_active_session_id');
     } catch (e) {}
     return [
       {
@@ -235,19 +242,82 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     ];
   });
 
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
-    try {
-      const savedId = localStorage.getItem('halye_active_session_id');
-      if (savedId) return savedId;
-    } catch (e) {}
-    return 'session-main';
-  });
+  const [activeSessionId, setActiveSessionId] = useState<string>('session-main');
 
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState('');
   const [inspectingScreenshot, setInspectingScreenshot] = useState<AttachedFile | null>(null);
   const [codeCopiedNotice, setCodeCopiedNotice] = useState<string | null>(null);
+
+  // In-Chat 4-Model Squad API Keys State
+  const [inChatNvidiaKey, setInChatNvidiaKey] = useState('');
+  const [inChatGeminiKey, setInChatGeminiKey] = useState('');
+  const [inChatGroqKey, setInChatGroqKey] = useState('');
+  const [inChatOpenRouterKey, setInChatOpenRouterKey] = useState('');
+  const [showInChatNvidia, setShowInChatNvidia] = useState(false);
+  const [showInChatGemini, setShowInChatGemini] = useState(false);
+  const [isSavingInChatKeys, setIsSavingInChatKeys] = useState(false);
+  const [inChatKeySaveMsg, setInChatKeySaveMsg] = useState<{ success: boolean; text: string } | null>(null);
+  const [keysConfiguredStatus, setKeysConfiguredStatus] = useState<any>(null);
+  const [isKeysBoxExpanded, setIsKeysBoxExpanded] = useState<boolean>(true);
+
+  const fetchKeysConfiguredStatus = () => {
+    fetch('/api/model/keys')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.keys) {
+          setKeysConfiguredStatus(data.keys);
+          const hasAny = Object.values(data.keys).some((k: any) => k?.configured);
+          if (!hasAny) {
+            setIsKeysBoxExpanded(true);
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchKeysConfiguredStatus();
+  }, []);
+
+  const handleSaveInChatKeys = async () => {
+    setIsSavingInChatKeys(true);
+    setInChatKeySaveMsg(null);
+    try {
+      const payload: Record<string, string> = {};
+      if (inChatNvidiaKey.trim()) payload.nvidia = inChatNvidiaKey.trim();
+      if (inChatGeminiKey.trim()) payload.gemini = inChatGeminiKey.trim();
+      if (inChatGroqKey.trim()) payload.groq = inChatGroqKey.trim();
+      if (inChatOpenRouterKey.trim()) payload.openrouter = inChatOpenRouterKey.trim();
+
+      const res = await fetch('/api/model/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setInChatKeySaveMsg({
+          success: true,
+          text: 'Keys successfully saved! 4-Model Squad is active and ready for your prompts.',
+        });
+        fetchKeysConfiguredStatus();
+        fetch('/api/model/status')
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.success) setModelInfo((prev) => prev ? { ...prev, status: d.status, activeModel: d.activeModel } : null);
+          })
+          .catch(() => {});
+      } else {
+        setInChatKeySaveMsg({ success: false, text: data.error || 'Failed to save keys' });
+      }
+    } catch (err: any) {
+      setInChatKeySaveMsg({ success: false, text: err.message || 'Error connecting to server' });
+    } finally {
+      setIsSavingInChatKeys(false);
+    }
+  };
 
   // Sync sessions to localStorage
   useEffect(() => {
@@ -461,6 +531,19 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
     const userMessageText = textToSend.trim();
 
+    // Direct API key extraction if user typed or pasted key in chat prompt
+    const nvidiaMatch = userMessageText.match(/nvapi-[A-Za-z0-9_-]{20,}/);
+    const geminiMatch = userMessageText.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+    const groqMatch = userMessageText.match(/gsk_[A-Za-z0-9_-]{20,}/);
+    const openrouterMatch = userMessageText.match(/sk-or-v1-[A-Za-z0-9_-]{30,}|sk-or-[A-Za-z0-9_-]{20,}/);
+    if (nvidiaMatch) setInChatNvidiaKey(nvidiaMatch[0]);
+    if (geminiMatch) setInChatGeminiKey(geminiMatch[0]);
+    if (groqMatch) setInChatGroqKey(groqMatch[0]);
+    if (openrouterMatch) setInChatOpenRouterKey(openrouterMatch[0]);
+    if (nvidiaMatch || geminiMatch || groqMatch || openrouterMatch) {
+      setIsKeysBoxExpanded(true);
+    }
+
     // Clear input & staged files
     setPrompt('');
     if (!overrideFiles) {
@@ -491,6 +574,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       });
 
       const data = await res.json();
+
+      if (data.showKeysBox) {
+        setIsKeysBoxExpanded(true);
+      }
+      if (data.keysSaved) {
+        fetchKeysConfiguredStatus();
+      }
 
       // If terminal execution returned in response
       let termResult: TerminalExecutionResult | undefined = undefined;
@@ -624,18 +714,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       const data = await res.json();
       if (data.success) {
         setWebInspectionData(data);
-        const touchCount = (data.touchable_elements?.buttons?.length || 0) + (data.touchable_elements?.interactive_links?.length || 0) + (data.touchable_elements?.inputs?.length || 0);
-        
-        // Add chat feedback
-        const eyeMessage: ChatMessage = {
-          id: 'ast-eye-' + Date.now(),
-          role: 'assistant',
-          text: `Webpage **${data.url}** (${data.title || 'Page'}) inspect kar li hai. ${touchCount} interactive elements (buttons, inputs, links) detect kiye gaye hain. Report Web Eyes tab mein mojood hai.`,
-          webInspection: data,
-          timestamp: new Date().toLocaleTimeString(),
-          actionTaken: `Web Eyes Inspected: ${data.title}`,
-        };
-        setConversation((prev) => [...prev, eyeMessage]);
       } else {
         throw new Error(data.error || 'Inspection failed');
       }
@@ -651,17 +729,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         human_readable_summary: `URL ${target} inspected. Server responded with connection verification.`
       };
       setWebInspectionData(fallbackData);
-      setConversation((prev) => [
-        ...prev,
-        {
-          id: 'ast-eye-err-' + Date.now(),
-          role: 'assistant',
-          text: `Webpage **${target}** ko inspect kar liya gaya hai. Web Eyes tab me report check karein.`,
-          webInspection: fallbackData,
-          timestamp: new Date().toLocaleTimeString(),
-          actionTaken: `Web Eyes Inspected: ${target}`
-        }
-      ]);
     } finally {
       setIsInspectingWeb(false);
     }
@@ -1188,7 +1255,34 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              id="halye-keys-box-header-toggle"
+              onClick={() => setIsKeysBoxExpanded(!isKeysBoxExpanded)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[11px] font-mono transition cursor-pointer shadow-sm active:scale-95 ${
+                isKeysBoxExpanded
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-cyan-500/20'
+                  : 'bg-black hover:bg-zinc-900 border-zinc-800 text-cyan-400 hover:text-cyan-300'
+              }`}
+              title="Open or close 4-Model API Keys Box"
+            >
+              <Key className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Keys Box (Write Here)</span>
+              {keysConfiguredStatus && Object.values(keysConfiguredStatus).some((k: any) => k?.configured) ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              )}
+            </button>
+            <button
+              id="halye-clear-chat-header-btn"
+              onClick={handleClearCurrentChat}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-zinc-400 hover:text-amber-400 text-[10px] font-mono transition cursor-pointer shadow-sm active:scale-95"
+              title="Clear all messages and history"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear Chat</span>
+            </button>
             <button
               onClick={handleCreateNewSession}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-850 text-cyan-400 hover:text-cyan-300 text-[10px] font-mono transition cursor-pointer shadow-sm"
@@ -1271,20 +1365,213 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           )}
         </div>
 
+        {/* IN-SCREEN 4-MODEL SQUAD API KEY BOX (DIRECT INPUT - NO SECRETS MENU) */}
+        {isKeysBoxExpanded && (
+          <div id="halye-in-chat-api-key-box" className="p-3 sm:p-4 bg-zinc-950 border-b border-cyan-500/40 shadow-2xl shrink-0 max-h-[65vh] overflow-y-auto">
+            <div className="max-w-2xl mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/50 flex items-center justify-center text-cyan-400 shadow-inner">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wide">
+                        4 Real AI Models Squad API Key Box
+                      </h3>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
+                        Direct Input • No Secrets!
+                      </span>
+                    </div>
+                    <p className="text-[10px] sm:text-[11px] text-zinc-400">
+                      Kisi bhi boring Secrets menu mein jane ki bilkul zaroorat nahi — yahan direct apni keys enter karein!
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="halye-hide-keys-box-btn"
+                  onClick={() => setIsKeysBoxExpanded(false)}
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition cursor-pointer"
+                  title="Hide Keys Box"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 4 Models Badges Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono text-[10px]">
+                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
+                  <div className="text-amber-400 font-bold">🧠 Model 1</div>
+                  <div className="text-white font-semibold truncate text-[10px]">Llama 3.3 70B</div>
+                  <div className="text-zinc-500 text-[8px]">Orchestrator</div>
+                </div>
+                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
+                  <div className="text-emerald-400 font-bold">💻 Model 2</div>
+                  <div className="text-white font-semibold truncate text-[10px]">Qwen 2.5 Coder</div>
+                  <div className="text-zinc-500 text-[8px]">Terminal & Code</div>
+                </div>
+                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
+                  <div className="text-blue-400 font-bold">📐 Model 3</div>
+                  <div className="text-white font-semibold truncate text-[10px]">DeepSeek R1</div>
+                  <div className="text-zinc-500 text-[8px]">Deep Logic & Math</div>
+                </div>
+                <div className="p-1.5 rounded-lg bg-black border border-zinc-850 text-center">
+                  <div className="text-purple-400 font-bold">⚡ Model 4</div>
+                  <div className="text-white font-semibold truncate text-[10px]">Mixtral 8x22B</div>
+                  <div className="text-zinc-500 text-[8px]">UI Reviewer</div>
+                </div>
+              </div>
+
+              {/* Key Input Form */}
+              <div className="space-y-2.5 bg-black/80 p-3 rounded-xl border border-zinc-850">
+                {/* 1. NVIDIA Key */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-zinc-200 flex items-center gap-1.5 text-[11px]">
+                      <span>1. NVIDIA NIM API Key (Master Key)</span>
+                      <span className="text-[9px] text-cyan-400 font-mono bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-900/60">
+                        ⭐ 1 Key Powers All 4 Models
+                      </span>
+                    </label>
+                    {keysConfiguredStatus?.nvidia?.configured && (
+                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Active: {keysConfiguredStatus.nvidia.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      id="in-chat-nvidia-input"
+                      type={showInChatNvidia ? 'text' : 'password'}
+                      value={inChatNvidiaKey}
+                      onChange={(e) => setInChatNvidiaKey(e.target.value)}
+                      placeholder={keysConfiguredStatus?.nvidia?.configured ? 'Active key saved. Type here to replace.' : 'nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInChatNvidia(!showInChatNvidia)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showInChatNvidia ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-zinc-500">
+                    Free 1,000 credits key: <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">build.nvidia.com</a> se milti hai.
+                  </p>
+                </div>
+
+                {/* 2. Google Gemini Key */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-zinc-300 flex items-center gap-1 text-[11px]">
+                      <span>2. Google Gemini API Key</span>
+                      <span className="text-[9px] text-zinc-500 font-mono">(Optional)</span>
+                    </label>
+                    {keysConfiguredStatus?.gemini?.configured && (
+                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Active: {keysConfiguredStatus.gemini.masked}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 focus-within:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs transition">
+                    <input
+                      id="in-chat-gemini-input"
+                      type={showInChatGemini ? 'text' : 'password'}
+                      value={inChatGeminiKey}
+                      onChange={(e) => setInChatGeminiKey(e.target.value)}
+                      placeholder={keysConfiguredStatus?.gemini?.configured ? 'Active key saved. Type here to replace.' : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                      className="flex-1 bg-transparent text-white outline-none font-mono text-xs placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInChatGemini(!showInChatGemini)}
+                      className="text-zinc-400 hover:text-white transition p-1 cursor-pointer"
+                    >
+                      {showInChatGemini ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3 & 4. Groq and OpenRouter */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">3. Groq API Key (Optional)</label>
+                    <input
+                      id="in-chat-groq-input"
+                      type="password"
+                      value={inChatGroqKey}
+                      onChange={(e) => setInChatGroqKey(e.target.value)}
+                      placeholder={keysConfiguredStatus?.groq?.configured ? 'Active' : 'gsk_...'}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg px-2 py-1 text-xs text-white font-mono placeholder:text-zinc-600 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">4. OpenRouter Key (Optional)</label>
+                    <input
+                      id="in-chat-openrouter-input"
+                      type="password"
+                      value={inChatOpenRouterKey}
+                      onChange={(e) => setInChatOpenRouterKey(e.target.value)}
+                      placeholder={keysConfiguredStatus?.openrouter?.configured ? 'Active' : 'sk-or-...'}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg px-2 py-1 text-xs text-white font-mono placeholder:text-zinc-600 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Feedback Message */}
+                {inChatKeySaveMsg && (
+                  <div className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
+                    inChatKeySaveMsg.success ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950/50 text-rose-300 border border-rose-500/40'
+                  }`}>
+                    {inChatKeySaveMsg.success ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+                    <span>{inChatKeySaveMsg.text}</span>
+                  </div>
+                )}
+
+                {/* Action Row */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 border-t border-zinc-900">
+                  <p className="text-[9px] text-zinc-500 text-center sm:text-left">
+                    💡 <strong>Direct Chat Hint:</strong> Aap chat input me bhi <code className="text-cyan-400">nvapi-...</code> likh kar bhej sakti hain!
+                  </p>
+                  <button
+                    id="save-in-chat-keys-btn"
+                    type="button"
+                    onClick={handleSaveInChatKeys}
+                    disabled={isSavingInChatKeys}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95 disabled:opacity-50"
+                  >
+                    <Key className="w-3.5 h-3.5 fill-current" />
+                    <span>{isSavingInChatKeys ? 'Saving Keys...' : 'Save & Connect 4 Models'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Conversation Stream */}
         <div 
           className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs scroll-smooth flex flex-col"
           onPaste={handlePaste}
         >
-          {conversation.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none my-auto">
-              <div className="w-12 h-12 rounded-2xl bg-black border border-zinc-800 flex items-center justify-center text-cyan-400 mb-3 shadow-inner">
-                <Terminal className="w-6 h-6 text-cyan-400" />
+          {conversation.length === 0 && !isKeysBoxExpanded && (
+            <div className="flex-1 flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full my-auto space-y-3 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-cyan-400 shadow-inner">
+                <Key className="w-6 h-6 text-cyan-400" />
               </div>
-              <h2 className="text-sm font-bold text-white tracking-wide">Halye Assistant</h2>
-              <p className="text-[11px] text-zinc-500 max-w-xs mt-1 leading-relaxed">
-                Direct Roman Urdu Developer Environment. Koi bhi command, script ya instruction likhein — foran direct execution hogi.
+              <h2 className="text-base font-extrabold text-white">4 Real AI Models Squad Ready</h2>
+              <p className="text-xs text-zinc-400">
+                Llama 3.3 70B, Qwen 2.5 Coder 32B, DeepSeek R1 aur Mixtral 8x22B live active hain.
               </p>
+              <button
+                onClick={() => setIsKeysBoxExpanded(true)}
+                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 text-cyan-300 text-xs font-mono transition cursor-pointer shadow-lg flex items-center gap-2 active:scale-95"
+              >
+                <Key className="w-4 h-4 text-cyan-400" />
+                <span>Open API Keys Box (Write Keys Here)</span>
+              </button>
             </div>
           )}
 
@@ -1366,6 +1653,21 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                 {/* Message Body */}
                 <p className="whitespace-pre-wrap leading-relaxed text-zinc-300 font-sans">{msg.text}</p>
 
+                {/* API Key Action Button if keys are required or missing */}
+                {((msg.text && (msg.text.includes('API Key') || msg.text.includes('API key'))) || (msg as any).needsApiKey) && (
+                  <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] text-amber-300 font-medium">Real AI Models require an active API key to connect</span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenApiKey ? onOpenApiKey() : setIsApiKeyModalOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md active:scale-95"
+                    >
+                      <Key className="w-3.5 h-3.5 fill-current" />
+                      <span>Configure API Keys</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Action Taken & Model Tag */}
                 {(msg.actionTaken || msg.model) && (
                   <div className="mt-2.5 pt-2 border-t border-zinc-900 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono">
@@ -1380,27 +1682,27 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         {msg.model === 'squad-ensemble' ? (
                           <>
                             <Sparkles className="w-3 h-3 text-cyan-400" />
-                            <span className="text-cyan-300 font-bold">All 4 Models Squad (Mix)</span>
+                            <span className="text-cyan-300 font-bold">4-Model Squad (Real Pipeline)</span>
                           </>
-                        ) : msg.model === 'google/gemma-4-31b-it' ? (
+                        ) : msg.model.includes('llama-3.3') || msg.model === 'google/gemma-4-31b-it' ? (
                           <>
                             <span>🧠</span>
-                            <span className="text-amber-300 font-bold">Gemma 4 31B IT (Solo Brain)</span>
+                            <span className="text-amber-300 font-bold">Llama 3.3 70B (Orchestrator)</span>
                           </>
-                        ) : msg.model === 'poolside/laguna-xs-2.1' ? (
+                        ) : msg.model.includes('qwen') || msg.model === 'poolside/laguna-xs-2.1' ? (
                           <>
                             <span>💻</span>
-                            <span className="text-emerald-300 font-bold">Laguna XS 2.1 (Solo Terminal)</span>
+                            <span className="text-emerald-300 font-bold">Qwen 2.5 Coder 32B (Terminal)</span>
                           </>
-                        ) : msg.model === 'deepseek-ai/deepseek-v4-pro-0813' ? (
+                        ) : msg.model.includes('deepseek') ? (
                           <>
                             <span>📐</span>
-                            <span className="text-blue-300 font-bold">DeepSeek V4 Pro (Solo Code)</span>
+                            <span className="text-blue-300 font-bold">DeepSeek R1 (Deep Logic)</span>
                           </>
-                        ) : msg.model === 'minimaxai/minimax-m3' ? (
+                        ) : msg.model.includes('mixtral') || msg.model === 'minimaxai/minimax-m3' ? (
                           <>
                             <span>⚡</span>
-                            <span className="text-purple-300 font-bold">MiniMax M3 (Solo UI)</span>
+                            <span className="text-purple-300 font-bold">Mixtral 8x22B (UI Reviewer)</span>
                           </>
                         ) : (
                           <>
@@ -1458,13 +1760,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                      {/* Gemma 4 31B: Orchestrator */}
+                      {/* Llama 3.3 70B: Orchestrator */}
                       <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                         <div className="flex items-center justify-between text-zinc-400">
                           <span className="text-amber-400 font-bold flex items-center gap-1">
                             <span>🧠</span> Orchestrator
                           </span>
-                          <span className="text-zinc-600 text-[9px]">gemma-4-31b-it</span>
+                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.orchestrator.model || 'Llama 3.3 70B'}</span>
                         </div>
                         <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                           {msg.pipeline.orchestrator.plan}
@@ -1484,13 +1786,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       </div>
 
-                      {/* Laguna XS 2.1: Execution Master */}
+                      {/* Qwen 2.5 Coder 32B: Execution Master */}
                       <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                         <div className="flex items-center justify-between text-zinc-400">
                           <span className="text-emerald-400 font-bold flex items-center gap-1">
                             <span>⚡</span> Execution Master
                           </span>
-                          <span className="text-zinc-600 text-[9px]">laguna-xs-2.1</span>
+                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.executionMaster?.model || 'Qwen 2.5 Coder 32B'}</span>
                         </div>
                         <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                           {msg.pipeline.executionMaster?.actionSummary || 'Direct physical tool automation and self-healing active.'}
@@ -1507,14 +1809,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       </div>
 
-                      {/* DeepSeek V4 Pro: Deep Logic */}
+                      {/* DeepSeek R1: Deep Logic */}
                       {msg.pipeline.deepReasoner && (
                         <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                           <div className="flex items-center justify-between text-zinc-400">
                             <span className="text-indigo-400 font-bold flex items-center gap-1">
                               <span>📐</span> Deep Logic & Code
                             </span>
-                            <span className="text-zinc-600 text-[9px]">deepseek-v4-pro-0813</span>
+                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.deepReasoner.model || 'DeepSeek R1'}</span>
                           </div>
                           <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
                             {msg.pipeline.deepReasoner.summary || 'Contextual code architecture verified.'}
@@ -1522,14 +1824,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       )}
 
-                      {/* MiniMax M3: UI Reviewer */}
+                      {/* Mixtral 8x22B: UI Reviewer */}
                       {msg.pipeline.reviewer && (
                         <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
                           <div className="flex items-center justify-between text-zinc-400">
                             <span className="text-fuchsia-400 font-bold flex items-center gap-1">
                               <span>🎨</span> UI Reviewer
                             </span>
-                            <span className="text-zinc-600 text-[9px]">minimax-m3</span>
+                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.reviewer.model || 'Mixtral 8x22B'}</span>
                           </div>
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-zinc-400 text-[10px]">Syntax Score:</span>
@@ -1941,38 +2243,26 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
           <button
             type="button"
-            onClick={() => handleSendPrompt("Is code ko thoroughly explain karo: architecture, components, data flow aur logic samjhao.")}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
-          >
-            <Code2 className="w-3 h-3 text-emerald-400" />
-            <span>Explain Code</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSendPrompt("Current code aur recent execution logs me errors check karo, bugs diagnose karo aur fix provide karo.")}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
-          >
-            <AlertCircle className="w-3 h-3 text-amber-400" />
-            <span>Debug & Fix</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSendPrompt("Is task ya webpage ke liye complete standalone modern HTML + Tailwind CSS web application Pitch Black AMOLED (#000000) theme me likho.")}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
-          >
-            <Sparkles className="w-3 h-3 text-cyan-400" />
-            <span>AMOLED App</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsApiKeyModalOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white border border-zinc-800 hover:border-cyan-500/40 shrink-0 transition cursor-pointer active:scale-95"
+            onClick={() => setIsKeysBoxExpanded(!isKeysBoxExpanded)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border shrink-0 transition cursor-pointer active:scale-95 ${
+              isKeysBoxExpanded
+                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-sm'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white border-zinc-800 hover:border-cyan-500/40'
+            }`}
+            title="Open or close API Keys Box (Write Here)"
           >
             <Key className="w-3 h-3 text-cyan-400" />
-            <span>API Keys Box</span>
+            <span>Keys Box (Write Here)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearCurrentChat}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 border border-zinc-800 shrink-0 transition cursor-pointer active:scale-95"
+            title="Clear all messages from chat"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Clear All Messages</span>
           </button>
         </div>
 

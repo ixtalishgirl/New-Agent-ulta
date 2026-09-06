@@ -1,10 +1,10 @@
 /**
- * Master Architecture: Multi-Model Agentic Pipeline with Full Terminal, Pip, Python & Playwright Tool Integration
- * Roles:
- * 1. Primary Brain / Orchestrator: google/gemma-4-31b-it (Google)
- * 2. Agentic Execution & Terminal Master: poolside/laguna-xs-2.1 (Poolside)
- * 3. Massive Code Context & Deep Logic: deepseek-ai/deepseek-v4-pro-0813 (DeepSeek AI)
- * 4. UI/Multimodal & Rapid Fixes: minimaxai/minimax-m3 (Minimaxai)
+ * Master Architecture: Multi-Model Agentic Pipeline with Real Model Inference
+ * Real Models:
+ * 1. Primary Brain / Orchestrator: meta/llama-3.3-70b-instruct (Meta AI)
+ * 2. Agentic Execution & Terminal Master: qwen/qwen2.5-coder-32b-instruct (Alibaba Cloud)
+ * 3. Massive Reasoning & Deep Logic: deepseek-ai/deepseek-r1 (DeepSeek AI)
+ * 4. UI & Rapid Syntax Fixes: mistralai/mixtral-8x22b-instruct-v0.1 (Mistral AI)
  */
 
 import { exec } from 'child_process';
@@ -24,57 +24,57 @@ export interface ModelSquadMember {
 
 export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
   orchestrator: {
-    id: 'google/gemma-4-31b-it',
-    name: 'Gemma 4 31B IT (Orchestrator & Primary Brain)',
+    id: 'meta/llama-3.3-70b-instruct',
+    name: 'Llama 3.3 70B Instruct (Orchestrator & Lead Brain)',
     role: 'Orchestrator',
     provider: 'nvidia',
-    parameters: '31 Billion (Google DeepMind)',
-    speedRating: '~220 tokens/sec',
-    description: 'Main router and planner. Listens to user prompts, constructs structured execution plans, delegates to specialized squad members, and oversees end-to-end task completion.',
-    strengths: ['Primary Task Decomposition', 'Structured JSON Plan Generation', 'Cross-Model Delegation', 'Multilingual Roman Urdu Mastery'],
+    parameters: '70 Billion (Meta AI)',
+    speedRating: '~180 tokens/sec',
+    description: 'High-intelligence 70B frontier model. Decomposes tasks into structured plans, analyzes user requests, and delegates to specialized coding & review agents.',
+    strengths: ['Task Planning & Routing', 'Structured Architectural Planning', 'Cross-Model Delegation', 'Multilingual & Roman Urdu'],
   },
   terminalMaster: {
-    id: 'poolside/laguna-xs-2.1',
-    name: 'Laguna XS 2.1 (Terminal & Agentic Execution Master)',
+    id: 'qwen/qwen2.5-coder-32b-instruct',
+    name: 'Qwen 2.5 Coder 32B (Terminal & Code Master)',
     role: 'Terminal Master',
     provider: 'nvidia',
-    parameters: '33 Billion MoE (Poolside AI)',
-    speedRating: '~260 tokens/sec',
-    description: 'Specialized 33B MoE model built for terminal execution, bash automation, pip management, sandbox scripting, and self-correction loops.',
-    strengths: ['Direct Bash & Linux Mastery', 'Pip Package Installation & Telemetry', 'Autonomous Self-Correction on Stderr', 'ReAct Tool Execution'],
+    parameters: '32.5 Billion (Alibaba Cloud)',
+    speedRating: '~240 tokens/sec',
+    description: 'World-class coding model specialized in Linux CLI commands, Bash automation, pip dependency management, and sandbox execution loops.',
+    strengths: ['Direct Linux Shell & Bash', 'Pip Package Verification', 'Self-Correction on Errors', 'Tool Invocation Syntax'],
   },
   deepLogic: {
-    id: 'deepseek-ai/deepseek-v4-pro-0813',
-    name: 'DeepSeek V4 Pro (Massive Code Context & Deep Logic)',
+    id: 'deepseek-ai/deepseek-r1',
+    name: 'DeepSeek R1 (Frontier Reasoning & Deep Logic)',
     role: 'Deep Logic',
     provider: 'nvidia',
-    parameters: 'Colossal Context Frontier (DeepSeek AI)',
-    speedRating: '~180 tokens/sec',
-    description: 'High-capacity code synthesizer and mathematical reasoning engine for massive codebases, multi-file software architecture, and complex algorithms.',
-    strengths: ['Massive Multi-File Code Context', 'Complex Algorithmic Synthesis', 'Production-Grade Software Logic', 'Zero Degradation Reasoning'],
+    parameters: '671B MoE Frontier (DeepSeek AI)',
+    speedRating: 'Deep Reasoning',
+    description: 'Open frontier reasoning model for complex algorithms, full-stack state management, mathematical logic, and complete software synthesis.',
+    strengths: ['Chain-of-Thought Deep Reasoning', 'Complete Interactive Code Synthesis', 'Zero Degradation Logic', 'Advanced Mathematical Algorithms'],
   },
   uiReviewer: {
-    id: 'minimaxai/minimax-m3',
-    name: 'MiniMax M3 (UI Multimodal & Rapid Fixes)',
+    id: 'mistralai/mixtral-8x22b-instruct-v0.1',
+    name: 'Mixtral 8x22B (UI Reviewer & Rapid Syntax Fixes)',
     role: 'UI & Rapid Fixes',
     provider: 'nvidia',
-    parameters: 'High-Speed Multimodal (MiniMax)',
-    speedRating: '~320 tokens/sec',
-    description: 'Rapid UI inspector, screenshot analysis, syntax validation, and instant repair model. Verifies HTML/CSS/JS integrity and live preview safety before outputting.',
-    strengths: ['Rapid Syntax & Tag Verification', 'Live Preview DOM Inspector', 'Sub-Second Quick Fixes', 'Visual Perception & Layout Tuning'],
+    parameters: '176B Sparse MoE (Mistral AI)',
+    speedRating: '~280 tokens/sec',
+    description: 'High-throughput sparse Mixture-of-Experts model. Audits DOM syntax, checks unclosed tags, enforces AMOLED pitch-black styling, and fixes errors.',
+    strengths: ['Rapid DOM & HTML Verification', 'Tailwind CSS Class Audit', 'Sub-Second AST Linting', 'AMOLED Layout Perfection'],
   },
 };
 
 export const SQUAD_CATALOG_ITEMS = [
   {
     id: 'squad-ensemble',
-    name: '4-Model Squad Ensemble (Collaborative Mixed Pipeline)',
+    name: '4-Model Squad Ensemble (Real Inter-Model Pipeline)',
     category: '4-Model Squad (Ensemble)' as const,
     roleInSquad: 'All 4 Models Collaborating' as any,
-    parameters: 'Gemma 4 (31B) + Laguna XS (33B) + DeepSeek V4 + MiniMax M3',
-    speedRating: 'Full Pipeline ~0.8s',
-    description: 'All 4 agents run mixed together in a unified pipeline: Gemma 4 plans & routes, Laguna XS executes tools, DeepSeek V4 codes logic, and MiniMax M3 reviews UI syntax.',
-    strengths: ['All 4 Agents Running Mixed', 'Orchestration & Task Planning', 'ReAct Self-Correction on Terminal', 'Deep Code Synthesis & Syntax Verification'],
+    parameters: 'Llama 3.3 (70B) + Qwen Coder (32B) + DeepSeek R1 + Mixtral 8x22B',
+    speedRating: 'Full Pipeline Real Inference',
+    description: 'All 4 real agents collaborate in an automated pipeline: Llama 3.3 70B plans & routes, Qwen 2.5 Coder executes terminal tools, DeepSeek R1 generates full logic/code, and Mixtral 8x22B verifies syntax.',
+    strengths: ['Real Cross-Model Communication', 'Task Decomposition & Planning', 'ReAct Self-Correction on Terminal', 'Deep Code Synthesis & Syntax Verification'],
     provider: 'nvidia' as const,
   },
   {
