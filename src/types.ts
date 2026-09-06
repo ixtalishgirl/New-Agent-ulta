@@ -67,6 +67,8 @@ export interface ChatMessage {
   model?: string;
   provider?: string;
   actionTaken?: string;
+  pipeline?: AgenticSquadPipeline;
+  toolCalls?: AgentToolCall[];
 }
 
 export interface ChatSession {
@@ -123,15 +125,63 @@ export interface HalyePowerItem {
   createdAt: string;
 }
 
+export interface AgentToolCall {
+  id: string;
+  tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+  args: Record<string, any>;
+  result: {
+    success: boolean;
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+    durationMs?: number;
+    data?: any;
+    error?: string;
+  };
+  selfCorrectionAttempts?: number;
+  correctedWith?: string;
+}
+
+export interface AgenticSquadPipeline {
+  orchestrator: {
+    model: string; // google/gemma-4-31b-it
+    role: string;
+    plan: string;
+    steps: string[];
+    delegatedTo: string;
+  };
+  executionMaster?: {
+    model: string; // poolside/laguna-xs-2.1
+    role: string;
+    actionSummary: string;
+    selfCorrectionLoops: number;
+    success: boolean;
+  };
+  deepReasoner?: {
+    model: string; // deepseek-ai/deepseek-v4-pro-0813
+    role: string;
+    codeArchitecture?: string;
+    summary?: string;
+  };
+  reviewer?: {
+    model: string; // minimaxai/minimax-m3
+    role: string;
+    syntaxScore: number;
+    passedReview: boolean;
+    fixesApplied: string[];
+  };
+}
+
 export interface NvidiaModelCatalogItem {
   id: string;
   name: string;
-  category: 'Running Active' | 'Fastest / High Speed' | 'Largest / High Capacity' | 'Flagship Reasoning & Coding' | 'Multimodal Vision' | 'Uncensored Frontier';
+  category: 'Running Active' | '4-Model Squad (Ensemble)' | 'Fastest / High Speed' | 'Largest / High Capacity' | 'Flagship Reasoning & Coding' | 'Multimodal Vision' | 'Uncensored Frontier';
   parameters: string;
   speedRating: string;
   description: string;
   strengths: string[];
   provider?: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
+  roleInSquad?: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
 }
 
 export interface CustomModelSettings {

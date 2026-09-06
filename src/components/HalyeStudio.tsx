@@ -41,7 +41,8 @@ import {
   Rocket,
   ShieldCheck,
   ShieldAlert,
-  Columns
+  Cpu,
+  Key
 } from 'lucide-react';
 import { 
   AttachedFile, 
@@ -54,11 +55,59 @@ import {
   HalyePowerItem,
   ChatSession
 } from '../types';
-import { NvidiaCatalogModal } from './NvidiaCatalogModal';
 import { WorkspaceExplorer } from './WorkspaceExplorer';
 import { PowersSuite } from './PowersSuite';
 import { ScreenshotModal } from './ScreenshotModal';
+import { ApiKeyModal } from './ApiKeyModal';
 import { BLANK_CANVAS_CODE } from '../templates';
+
+export const HALYE_CORE_MODELS = [
+  {
+    id: 'squad-ensemble',
+    name: 'All 4 Models Squad (Collaborative Ensemble)',
+    shortName: '⚡ All 4 Models',
+    badge: '4-Model Squad',
+    badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
+    icon: '⚡',
+    desc: 'Gemma 4 (Plan) + Laguna XS (Exec) + DeepSeek V4 (Code) + MiniMax M3 (UI)',
+  },
+  {
+    id: 'google/gemma-4-31b-it',
+    name: 'Gemma 4 31B IT (Solo Brain)',
+    shortName: '🧠 Gemma 4',
+    badge: '31B Orchestrator',
+    badgeColor: 'text-amber-400 bg-amber-950/60 border-amber-800/60',
+    icon: '🧠',
+    desc: 'Architecture design, task decomposition, and Roman Urdu planning',
+  },
+  {
+    id: 'poolside/laguna-xs-2.1',
+    name: 'Laguna XS 2.1 (Solo Terminal Master)',
+    shortName: '💻 Laguna XS',
+    badge: '33B Terminal',
+    badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60',
+    icon: '💻',
+    desc: 'Autonomous Linux bash, Python 3, pip, and agentic tool loop',
+  },
+  {
+    id: 'deepseek-ai/deepseek-v4-pro-0813',
+    name: 'DeepSeek V4 Pro (Solo Code Architecture)',
+    shortName: '📐 DeepSeek V4',
+    badge: 'Deep Logic',
+    badgeColor: 'text-blue-400 bg-blue-950/60 border-blue-800/60',
+    icon: '📐',
+    desc: 'Massive context code synthesis, full-stack state, and algorithms',
+  },
+  {
+    id: 'minimaxai/minimax-m3',
+    name: 'MiniMax M3 (Solo UI & Rapid Fixes)',
+    shortName: '⚡ MiniMax M3',
+    badge: 'UI & Fixes',
+    badgeColor: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
+    icon: '⚡',
+    desc: 'UI layout review, DOM syntax repair, and pure AMOLED styling',
+  },
+];
 
 const DEFAULT_HALYE_CODE = BLANK_CANVAS_CODE;
 
@@ -81,8 +130,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [code, setCode] = useState<string>(initialCode || DEFAULT_HALYE_CODE);
   const [previewKey, setPreviewKey] = useState<number>(1);
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes' | 'split'>('split');
-  const [splitRatio, setSplitRatio] = useState<'50-50' | '40-60' | '60-40'>('50-50');
+  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes'>('preview');
   const [autoSelectWorkspaceFile, setAutoSelectWorkspaceFile] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -113,7 +161,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     hasTerminal: boolean;
   } | null>(null);
   const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
-  const [showModelCatalog, setShowModelCatalog] = useState(false);
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
 
   // Fetch active AI model status on mount
@@ -137,11 +186,30 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       .catch(() => {});
   }, []);
 
+  const handleQuickModelSwap = async (modelId: string) => {
+    try {
+      const res = await fetch('/api/model/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'nvidia',
+          model: modelId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModelInfo((prev) => prev ? { ...prev, activeModel: modelId } : null);
+      }
+    } catch (err) {
+      console.warn('Quick model swap failed:', err);
+    }
+  };
+
   // Interactive Shell Terminal State (Right Pane)
   const [terminalInput, setTerminalInput] = useState('');
   const [isExecutingTerminal, setIsExecutingTerminal] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState<Array<{ cmd: string; out: string; err: string; exit: number; ms: number }>>([
-    { cmd: 'python3 halye_controller.py --status', out: '{\n  "agent": "Halye Assistant",\n  "status": "ONLINE",\n  "mode": "Direct Bash/Python Automation",\n  "python_version": "3.10.12",\n  "model": "nvidia/nemotron-3-nano-30b-a3b"\n}', err: '', exit: 0, ms: 12 },
+    { cmd: 'python3 halye_controller.py --status', out: '{\n  "agent": "Halye Assistant",\n  "status": "ONLINE",\n  "mode": "Direct Bash/Python/Pip/Playwright Automation",\n  "python_version": "3.11.2",\n  "model": "google/gemma-4-31b-it (4-Model Squad Orchestrator)"\n}', err: '', exit: 0, ms: 12 },
     { cmd: 'uname -a', out: 'Linux halye-container 6.6.137+ #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux', err: '', exit: 0, ms: 8 }
   ]);
 
@@ -418,6 +486,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           prompt: userMessageText,
           currentCode: code,
           attachedFiles: filesForThisMessage,
+          model: modelInfo?.activeModel || 'squad-ensemble',
         }),
       });
 
@@ -493,10 +562,16 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         zipInspection: data.zipInspection,
         powerBuilt: data.powerBuilt,
         fileCreated: data.fileCreated,
+        pipeline: data.pipeline,
+        toolCalls: data.toolCalls,
         timestamp: new Date().toLocaleTimeString(),
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
-        actionTaken: data.zipInspection
+        actionTaken: data.pipeline
+          ? `4-Model Squad Pipeline: ${data.pipeline.orchestrator?.model || 'google/gemma-4-31b-it'}`
+          : data.toolCalls && data.toolCalls.length > 0
+          ? `Executed ${data.toolCalls.length} Native Tool(s) via Laguna XS`
+          : data.zipInspection
           ? `ZIP Archive Inspected: ${data.zipInspection.archive_name}`
           : data.powerBuilt
           ? `Autonomous Power Built: ${data.powerBuilt.name}`
@@ -1044,17 +1119,15 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
-              onClick={() => setShowModelCatalog(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-amber-500/30 text-[10px] font-mono transition cursor-pointer shadow-sm"
-              title="Click to switch model or test inference speed"
+              id="header-api-keys-btn"
+              onClick={() => setIsApiKeyModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white text-[11px] font-mono flex items-center gap-1.5 border border-zinc-800 hover:border-cyan-500/40 transition cursor-pointer"
+              title="Open API Keys & GitHub Secrets Box"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${modelInfo?.status === 'online' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
-              <span className="text-zinc-200 font-semibold truncate max-w-[140px]">
-                {modelInfo?.activeModel ? modelInfo.activeModel.split('/').pop() : 'llama-3.2-11b-vision-instruct'}
-              </span>
-              <span className="px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold">MODELS</span>
+              <Key className="w-3 h-3 text-cyan-400" />
+              <span>API Keys</span>
             </button>
             <button
               onClick={() => setActivePane('terminal')}
@@ -1303,8 +1376,38 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                       </div>
                     )}
                     {msg.model && (
-                      <span className="text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-[9px]">
-                        ⚡ Halye Assistant
+                      <span className="text-zinc-300 bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800 text-[10px] font-mono flex items-center gap-1.5">
+                        {msg.model === 'squad-ensemble' ? (
+                          <>
+                            <Sparkles className="w-3 h-3 text-cyan-400" />
+                            <span className="text-cyan-300 font-bold">All 4 Models Squad (Mix)</span>
+                          </>
+                        ) : msg.model === 'google/gemma-4-31b-it' ? (
+                          <>
+                            <span>🧠</span>
+                            <span className="text-amber-300 font-bold">Gemma 4 31B IT (Solo Brain)</span>
+                          </>
+                        ) : msg.model === 'poolside/laguna-xs-2.1' ? (
+                          <>
+                            <span>💻</span>
+                            <span className="text-emerald-300 font-bold">Laguna XS 2.1 (Solo Terminal)</span>
+                          </>
+                        ) : msg.model === 'deepseek-ai/deepseek-v4-pro-0813' ? (
+                          <>
+                            <span>📐</span>
+                            <span className="text-blue-300 font-bold">DeepSeek V4 Pro (Solo Code)</span>
+                          </>
+                        ) : msg.model === 'minimaxai/minimax-m3' ? (
+                          <>
+                            <span>⚡</span>
+                            <span className="text-purple-300 font-bold">MiniMax M3 (Solo UI)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-cyan-400" />
+                            <span className="text-zinc-300">{msg.model}</span>
+                          </>
+                        )}
                       </span>
                     )}
                   </div>
@@ -1338,6 +1441,163 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         {msg.terminalResult.stderr}
                       </pre>
                     )}
+                  </div>
+                )}
+
+                {/* 4-Model Squad Agentic Pipeline Telemetry Card */}
+                {msg.pipeline && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/40 p-3 space-y-3 font-mono text-[11px] shadow-lg shadow-cyan-950/20">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-cyan-400" />
+                        <span className="font-bold text-white tracking-wide">4-Model Squad Multi-Agent Pipeline</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[9px] font-bold">
+                        ACTIVE COLLABORATION
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                      {/* Gemma 4 31B: Orchestrator */}
+                      <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
+                        <div className="flex items-center justify-between text-zinc-400">
+                          <span className="text-amber-400 font-bold flex items-center gap-1">
+                            <span>🧠</span> Orchestrator
+                          </span>
+                          <span className="text-zinc-600 text-[9px]">gemma-4-31b-it</span>
+                        </div>
+                        <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
+                          {msg.pipeline.orchestrator.plan}
+                        </p>
+                        {msg.pipeline.orchestrator.steps && msg.pipeline.orchestrator.steps.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            {msg.pipeline.orchestrator.steps.map((step, sIdx) => (
+                              <div key={sIdx} className="text-zinc-400 text-[10px] flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                <span className="truncate">{step}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="pt-1 text-[9px] text-zinc-500">
+                          Delegated to: <span className="text-cyan-400 font-bold">{msg.pipeline.orchestrator.delegatedTo}</span>
+                        </div>
+                      </div>
+
+                      {/* Laguna XS 2.1: Execution Master */}
+                      <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
+                        <div className="flex items-center justify-between text-zinc-400">
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <span>⚡</span> Execution Master
+                          </span>
+                          <span className="text-zinc-600 text-[9px]">laguna-xs-2.1</span>
+                        </div>
+                        <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
+                          {msg.pipeline.executionMaster?.actionSummary || 'Direct physical tool automation and self-healing active.'}
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-[9px]">
+                            Status: {msg.pipeline.executionMaster?.success ? 'Success' : 'Active'}
+                          </span>
+                          {msg.pipeline.executionMaster?.selfCorrectionLoops ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[9px]">
+                              Self-Corrections: {msg.pipeline.executionMaster.selfCorrectionLoops}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* DeepSeek V4 Pro: Deep Logic */}
+                      {msg.pipeline.deepReasoner && (
+                        <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
+                          <div className="flex items-center justify-between text-zinc-400">
+                            <span className="text-indigo-400 font-bold flex items-center gap-1">
+                              <span>📐</span> Deep Logic & Code
+                            </span>
+                            <span className="text-zinc-600 text-[9px]">deepseek-v4-pro-0813</span>
+                          </div>
+                          <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
+                            {msg.pipeline.deepReasoner.summary || 'Contextual code architecture verified.'}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* MiniMax M3: UI Reviewer */}
+                      {msg.pipeline.reviewer && (
+                        <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
+                          <div className="flex items-center justify-between text-zinc-400">
+                            <span className="text-fuchsia-400 font-bold flex items-center gap-1">
+                              <span>🎨</span> UI Reviewer
+                            </span>
+                            <span className="text-zinc-600 text-[9px]">minimax-m3</span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-zinc-400 text-[10px]">Syntax Score:</span>
+                            <span className="text-fuchsia-400 font-bold text-xs">{msg.pipeline.reviewer.syntaxScore}/100</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Native Tool Calls Telemetry Card (Laguna XS Execution) */}
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2.5 font-mono text-[11px]">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="font-bold text-white text-xs">Laguna XS Native Tool Calls ({msg.toolCalls.length})</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500">Autonomous ReAct Execution</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {msg.toolCalls.map((tc, tcIdx) => (
+                        <div key={tcIdx} className="p-2.5 rounded-lg bg-black/80 border border-zinc-900 space-y-1.5 text-[10px]">
+                          <div className="flex items-center justify-between text-zinc-400">
+                            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                              {tc.tool}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {tc.result.durationMs && (
+                                <span className="text-zinc-500">{tc.result.durationMs}ms</span>
+                              )}
+                              <span className={`px-1.5 py-0.2 rounded font-bold ${
+                                tc.result.exitCode === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                              }`}>
+                                Exit: {tc.result.exitCode ?? 0}
+                              </span>
+                            </div>
+                          </div>
+
+                          {tc.args && (
+                            <div className="text-zinc-400 truncate text-[10px]">
+                              Arg: <span className="text-zinc-200 font-mono">{tc.args.command || tc.args.package_name || tc.args.script_path || tc.args.url || JSON.stringify(tc.args)}</span>
+                            </div>
+                          )}
+
+                          {tc.result.stdout && (
+                            <pre className="p-2 rounded bg-zinc-950 border border-zinc-900 text-zinc-300 max-h-32 overflow-y-auto whitespace-pre-wrap text-[10px]">
+                              {tc.result.stdout}
+                            </pre>
+                          )}
+
+                          {tc.result.stderr && (
+                            <pre className="p-2 rounded bg-rose-950/20 border border-rose-900/30 text-rose-400 max-h-24 overflow-y-auto whitespace-pre-wrap text-[10px]">
+                              {tc.result.stderr}
+                            </pre>
+                          )}
+
+                          {tc.selfCorrectionAttempts && tc.selfCorrectionAttempts > 1 ? (
+                            <div className="text-amber-400 text-[9px] flex items-center gap-1">
+                              <span>🔄</span> Auto-healed after {tc.selfCorrectionAttempts} attempts
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1705,9 +1965,18 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             <Sparkles className="w-3 h-3 text-cyan-400" />
             <span>AMOLED App</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setIsApiKeyModalOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-cyan-300 hover:text-white border border-zinc-800 hover:border-cyan-500/40 shrink-0 transition cursor-pointer active:scale-95"
+          >
+            <Key className="w-3 h-3 text-cyan-400" />
+            <span>API Keys Box</span>
+          </button>
         </div>
 
-        {/* Unified Input Bar with PLUS (+) Icon */}
+        {/* Unified Input Bar with PLUS (+) Icon & MODEL SWAPPER */}
         <div className="p-3 border-t border-zinc-900 bg-black flex items-end gap-2">
           {/* THE REQUESTED PLUS (+) BUTTON FOR SCREENSHOTS & FILES */}
           <button
@@ -1718,6 +1987,107 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             className="w-10 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-cyan-300 border border-zinc-800 flex items-center justify-center transition cursor-pointer shrink-0 active:scale-95 shadow-sm"
           >
             <Plus className="w-5 h-5 stroke-[2.5]" />
+          </button>
+
+          {/* MODEL SWAP DROP-UP NEXT TO PLUS BUTTON */}
+          <div className="relative shrink-0">
+            {(() => {
+              const currentModelObj =
+                HALYE_CORE_MODELS.find((m) => m.id === (modelInfo?.activeModel || 'squad-ensemble')) ||
+                HALYE_CORE_MODELS[0];
+              return (
+                <>
+                  <button
+                    id="halye-model-swap-btn"
+                    type="button"
+                    onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
+                    title="Click to swap AI model (Only the chosen model will run, or choose All 4 Models together)"
+                    className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono select-none active:scale-95"
+                  >
+                    <span className="text-sm">{currentModelObj.icon}</span>
+                    <span className="font-semibold hidden sm:inline max-w-[90px] truncate">
+                      {currentModelObj.shortName}
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-150 ${
+                        isModelSelectorOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {/* UPWARD DROPDOWN MENU */}
+                  {isModelSelectorOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 sm:w-84 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-2 z-50 space-y-1.5">
+                      <div className="px-2.5 py-1.5 border-b border-zinc-900 flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                        <span className="font-bold text-zinc-200">SWAP AI MODEL</span>
+                        <span className="text-emerald-400 font-bold">LOCKED SELECTION</span>
+                      </div>
+                      <div className="space-y-1 max-h-72 overflow-y-auto">
+                        {HALYE_CORE_MODELS.map((m) => {
+                          const isSelected = (modelInfo?.activeModel || 'squad-ensemble') === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                handleQuickModelSwap(m.id);
+                                setIsModelSelectorOpen(false);
+                              }}
+                              className={`w-full text-left p-2 rounded-xl transition cursor-pointer flex items-start gap-2.5 ${
+                                isSelected
+                                  ? 'bg-zinc-900 border border-zinc-700 text-white shadow-sm'
+                                  : 'hover:bg-zinc-900/60 text-zinc-300 hover:text-white border border-transparent'
+                              }`}
+                            >
+                              <div className="text-base mt-0.5 shrink-0">{m.icon}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-bold text-xs truncate">{m.name}</span>
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.5 rounded border font-mono shrink-0 ${m.badgeColor}`}
+                                  >
+                                    {m.badge}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">{m.desc}</p>
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 mt-1 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Config Keys Option in Dropdown */}
+                      <div className="pt-1.5 border-t border-zinc-900">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModelSelectorOpen(false);
+                            setIsApiKeyModalOpen(true);
+                          }}
+                          className="w-full py-1.5 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-cyan-300 border border-zinc-800 flex items-center justify-center gap-1.5 text-[11px] font-mono transition cursor-pointer"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Enter API Keys & GitHub Secrets</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* DEDICATED API KEYS BUTTON NEXT TO MODEL SWAPPER */}
+          <button
+            id="halye-api-keys-input-btn"
+            type="button"
+            onClick={() => setIsApiKeyModalOpen(true)}
+            title="Open API Keys & GitHub Secrets Box"
+            className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/40 text-cyan-400 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono active:scale-95"
+          >
+            <Key className="w-4 h-4" />
+            <span className="hidden xl:inline font-bold">API Keys</span>
           </button>
 
           {/* Text Input Area */}
@@ -1769,18 +2139,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           {/* Mode Switcher Tabs */}
           <div className="flex items-center bg-black border border-zinc-850 p-0.5 rounded-xl">
             <button
-              id="tab-split-btn"
-              onClick={() => setActivePane('split')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                activePane === 'split' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800 shadow-sm' : 'text-zinc-400 hover:text-white'
-              }`}
-              title="Side-by-Side: Instant Code Modifications & Protected Containerized Iframe"
-            >
-              <Columns className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Side-by-Side</span>
-            </button>
-
-            <button
               id="tab-preview-btn"
               onClick={() => setActivePane('preview')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
@@ -1814,8 +2172,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             </button>
           </div>
 
-          {/* Viewport Resizer (for Side-by-Side and Live Website tabs) */}
-          {(activePane === 'preview' || activePane === 'split') && (
+          {/* Viewport Resizer (for Live Website tab) */}
+          {activePane === 'preview' && (
             <div className="hidden sm:flex items-center gap-1 bg-black border border-zinc-850 p-0.5 rounded-xl">
               <button
                 onClick={() => setViewport('desktop')}
@@ -1888,241 +2246,27 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         {/* Workspace Canvas Body */}
         <div className="flex-1 overflow-hidden relative">
 
-          {/* 0. DEDICATED SIDE-BY-SIDE VIEW: INSTANT CODE MODIFICATIONS & PROTECTED CONTAINERIZED IFRAME */}
-          {activePane === 'split' && (
-            <div className="w-full h-full flex flex-row bg-black overflow-hidden divide-x divide-zinc-850">
-              
-              {/* LEFT COLUMN: Real-Time Code Modifications & Stream */}
-              <div className={`${splitRatio === '50-50' ? 'w-1/2' : splitRatio === '40-60' ? 'w-[40%]' : 'w-[60%]'} min-w-[200px] h-full flex flex-col bg-zinc-950 overflow-hidden shrink-0 transition-all duration-200`}>
-                {/* Code Header Bar */}
-                <div className="px-3 py-2 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-mono font-semibold">
-                      <Code2 className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Code (Left)</span>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-cyan-400 font-mono bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                      Live Sync
-                    </span>
-                  </div>
-
-                  {/* Ratio Switcher Controls */}
-                  <div className="flex items-center gap-1 bg-black/60 border border-zinc-800 rounded-lg p-0.5 text-[10px] font-mono">
-                    <button
-                      onClick={() => setSplitRatio('50-50')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer transition ${splitRatio === '50-50' ? 'bg-zinc-800 text-cyan-300 font-bold' : 'text-zinc-500 hover:text-zinc-300'}`}
-                      title="50% Code / 50% Preview"
-                    >
-                      50:50
-                    </button>
-                    <button
-                      onClick={() => setSplitRatio('60-40')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer transition ${splitRatio === '60-40' ? 'bg-zinc-800 text-cyan-300 font-bold' : 'text-zinc-500 hover:text-zinc-300'}`}
-                      title="60% Code / 40% Preview"
-                    >
-                      Code+
-                    </button>
-                    <button
-                      onClick={() => setSplitRatio('40-60')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer transition ${splitRatio === '40-60' ? 'bg-zinc-800 text-cyan-300 font-bold' : 'text-zinc-500 hover:text-zinc-300'}`}
-                      title="40% Code / 60% Preview"
-                    >
-                      Preview+
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-[10px] font-mono text-zinc-500 hidden sm:inline">
-                      {code.split('\n').length}L • {(new TextEncoder().encode(code).length / 1024).toFixed(1)}KB
-                    </span>
-                    <button
-                      onClick={handleCopyCode}
-                      className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/50 text-[11px] transition cursor-pointer"
-                      title="Copy code"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => handleClearCanvas()}
-                      className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-rose-900/30 text-zinc-400 hover:text-rose-400 border border-zinc-700/50 text-[11px] transition cursor-pointer"
-                      title="Clear canvas"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Interactive Code Editor (Instant Real-Time Sync) */}
-                <div className="flex-1 relative overflow-hidden bg-black">
-                  <textarea
-                    id="split-live-code-editor"
-                    value={code}
-                    onChange={(e) => {
-                      setCode(e.target.value);
-                    }}
-                    placeholder="<!-- Write HTML, Tailwind CSS, or JS. Modifications reflect immediately into the containerized iframe on the right -->"
-                    className="w-full h-full p-3.5 bg-black text-zinc-200 font-mono text-xs leading-relaxed outline-none resize-none selection:bg-cyan-500/30 overflow-auto border-0"
-                    spellCheck={false}
-                  />
-                </div>
-
-                {/* Code Footer Status Bar */}
-                <div className="px-3 py-1.5 bg-zinc-950 border-t border-zinc-850 flex items-center justify-between text-[10px] font-mono text-zinc-400 shrink-0">
-                  <div className="flex items-center gap-1.5 text-zinc-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    <span>Direct stream to containerized sandbox: Latency &lt; 1ms</span>
-                  </div>
-                  <span className="text-zinc-500 hidden sm:inline">HTML5 • Tailwind CSS • Modern JS</span>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Protected Containerized Iframe (Visual Verification Sandbox) */}
-              <div className={`${splitRatio === '50-50' ? 'w-1/2' : splitRatio === '40-60' ? 'w-[60%]' : 'w-[40%]'} min-w-[200px] h-full flex flex-col bg-black overflow-hidden shrink-0 transition-all duration-200`}>
-                {/* Visual Sandbox Header Bar */}
-                <div className="px-3 py-2 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-semibold">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Preview (Right)</span>
-                    </div>
-
-                    {isVerifyingVisuals ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-cyan-400 font-mono bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30 animate-pulse">
-                        <Loader2 className="w-3 h-3 animate-spin text-cyan-400" />
-                        Auditing...
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                        Ready
-                      </span>
-                    )}
-
-                    {isSelfHealing && (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono flex items-center gap-1 animate-pulse">
-                        ⚡ Self-Healing...
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {/* Visual Audit Verification Trigger Button */}
-                    <button
-                      id="split-visual-audit-btn"
-                      onClick={runVisualVerification}
-                      disabled={isVerifyingVisuals}
-                      className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 text-[11px] font-mono font-semibold transition cursor-pointer flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                      title="Run visual verification audit on protected container build"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="hidden sm:inline">Verify Build</span>
-                    </button>
-
-                    <button
-                      onClick={handleRunCode}
-                      className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/50 text-[11px] transition cursor-pointer"
-                      title="Reload Container Iframe"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      onClick={handleOpenStandalone}
-                      className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-750 text-zinc-300 hover:text-cyan-400 border border-zinc-700/50 text-[11px] transition cursor-pointer"
-                      title="Open in Standalone Tab"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Containerized Iframe Canvas Body */}
-                <div className="flex-1 bg-black p-2 sm:p-3 overflow-hidden flex items-center justify-center relative">
-                  <div
-                    className={`h-full transition-all duration-300 bg-black rounded-xl overflow-hidden border border-zinc-850 shadow-2xl relative ${
-                      viewport === 'mobile'
-                        ? 'w-[390px]'
-                        : viewport === 'tablet'
-                        ? 'w-[768px]'
-                        : 'w-full'
-                    }`}
-                  >
-                    <iframe
-                      key={`split-preview-${previewKey}`}
-                      id="split-live-app-preview-iframe"
-                      srcDoc={renderedIframeDoc}
-                      title="Halye Protected Container Sandbox"
-                      sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-                      className="w-full h-full border-0 bg-black"
-                    />
-                  </div>
-                </div>
-
-                {/* Agent Visual Verification Telemetry Dock */}
-                <div className="px-3 py-1.5 bg-zinc-950 border-t border-zinc-850 flex items-center justify-between text-[10px] font-mono text-zinc-400 shrink-0 flex-wrap gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-zinc-500 font-semibold">VERIFICATION TELEMETRY:</span>
-                    <span className="text-zinc-300">
-                      Title: <span className="text-cyan-400 truncate max-w-[120px] inline-block align-bottom">{visualVerificationStatus?.title || (code.match(/<title>([^<]*)<\/title>/i)?.[1] || 'Standby Canvas')}</span>
-                    </span>
-                    <span className="text-zinc-700">•</span>
-                    <span className="text-zinc-300">
-                      DOM Elements: <span className="text-emerald-400">{visualVerificationStatus?.elementsCount ?? ((code.match(/<div|<button|<input/gi) || []).length)}</span>
-                    </span>
-                    <span className="text-zinc-700">•</span>
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      Sandbox Protected (Isolated)
-                    </span>
-                  </div>
-
-                  {visualVerificationStatus?.lastVerifiedAt ? (
-                    <div className="text-zinc-500">
-                      Audited at {visualVerificationStatus.lastVerifiedAt}
-                    </div>
-                  ) : (
-                    <div className="text-zinc-500 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                      Visuals Verified
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* 1. LIVE WEB APPLICATION PREVIEW */}
           {activePane === 'preview' && (
             <div className="w-full h-full flex flex-col p-2 sm:p-4 bg-black overflow-hidden">
-              {/* Clean Sandbox Status Bar */}
+              {/* Clean Preview Status Bar */}
               <div className="mb-2 px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-xl flex items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`w-2 h-2 rounded-full ${isSelfHealing ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`}></span>
-                  <span className="text-xs font-bold text-white tracking-wide">Live Web Sandbox</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono font-semibold border border-cyan-500/30">
-                    {code ? (code === BLANK_CANVAS_CODE ? 'Standby (Awaiting Prompt)' : `${code.split('\n').length} lines (Agent Built)`) : 'Blank Canvas'}
-                  </span>
-                  {isSelfHealing && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono flex items-center gap-1 animate-pulse">
-                      ⚡ Self-Healing Auto-Fixing Runtime Error...
+                  <span className="text-xs font-bold text-white tracking-wide">Live Website</span>
+                  {code && code !== BLANK_CANVAS_CODE && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono font-semibold border border-cyan-500/30">
+                      {code.split('\n').length} lines
                     </span>
                   )}
-                  {lastHealEvent && !isSelfHealing && (
-                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20" title={`Last auto-healed at ${lastHealEvent.timestamp}: ${lastHealEvent.error}`}>
-                      💉 Auto-Healed ({lastHealEvent.fixMethod})
+                  {isSelfHealing && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono flex items-center gap-1 animate-pulse">
+                      ⚡ Self-Healing...
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => triggerSelfHealAutoFix('TypeError: Cannot read properties of undefined (reading "executeAgentAction")', 'at app.js:34:12\nat dispatchEvent (halye-runner.js:105)')}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 text-[10px] font-mono border border-zinc-800 transition cursor-pointer flex items-center gap-1"
-                    title="Simulate runtime exception to test autonomous self-healing without user intervention"
-                  >
-                    ⚡ Test Auto-Heal
-                  </button>
                   <button
                     onClick={handleOpenStandalone}
                     className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-cyan-400 border border-zinc-800 transition cursor-pointer"
@@ -2713,16 +2857,6 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         </div>
       </div>
 
-      <NvidiaCatalogModal
-        isOpen={showModelCatalog}
-        onClose={() => setShowModelCatalog(false)}
-        activeModel={modelInfo?.activeModel || 'meta/llama-3.2-11b-vision-instruct'}
-        catalog={catalog}
-        onModelSwitched={(modelId, provider) => {
-          setModelInfo((prev) => prev ? { ...prev, activeModel: modelId, provider } : null);
-        }}
-      />
-
       {/* Screenshot Full-Resolution Vision Perception Modal */}
       {inspectingScreenshot && (
         <ScreenshotModal
@@ -2733,6 +2867,29 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           }}
         />
       )}
+
+      {/* API Keys & GitHub Secrets Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onKeysUpdated={() => {
+          // Re-fetch model info
+          fetch('/api/model/status')
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.success) {
+                setModelInfo({
+                  status: d.status,
+                  provider: d.provider,
+                  activeModel: d.activeModel,
+                  hasVision: d.hasVision,
+                  hasTerminal: d.hasTerminal,
+                });
+              }
+            })
+            .catch(() => {});
+        }}
+      />
     </div>
   );
 };

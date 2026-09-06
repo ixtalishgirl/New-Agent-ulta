@@ -1,6 +1,6 @@
 {
   "name": "Halye AI Assistant",
-  "description": "Autonomous AI Developer Studio with live real-time website builder, side-by-side instant code modification & protected containerized iframe visual verification.",
+  "description": "Autonomous AI Developer Studio with live real-time website builder, protected containerized iframe preview & multi-model squad orchestration.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

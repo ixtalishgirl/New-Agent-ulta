@@ -97,5 +97,16 @@
     "version": "2.0.0",
     "invocations": 5,
     "createdAt": "2026-09-05T08:30:00Z"
+  },
+  {
+    "id": "power_playwright_automation",
+    "name": "Playwright Automation & Live Testing Engine",
+    "description": "Headless Chromium browser automation, live DOM testing, screenshot perception aur synthetic user testing.",
+    "category": "web",
+    "command": "python3 halye_powers/playwright_automation.py",
+    "status": "active",
+    "version": "3.0.0",
+    "invocations": 1,
+    "createdAt": "2026-09-06T00:00:00Z"
   }
 ]
