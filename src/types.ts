@@ -44,6 +44,64 @@ export interface WebInspectionResult {
   error?: string;
 }
 
+export interface ActionHistoryFileRead {
+  path: string;
+  linesCount?: number;
+  preview?: string;
+  status?: string;
+}
+
+export interface ActionHistoryFileEdited {
+  path: string;
+  linesModified?: number;
+  diffSummary?: string;
+  status?: string;
+}
+
+export interface ActionHistoryIssue {
+  title: string;
+  severity: 'error' | 'warning' | 'info';
+  description: string;
+}
+
+export interface ActionHistoryFix {
+  title: string;
+  description: string;
+}
+
+export interface ActionHistoryItem {
+  thought?: {
+    durationSeconds: number;
+    summary: string;
+    detailedSteps?: string[];
+  };
+  filesRead?: ActionHistoryFileRead[];
+  filesEdited?: ActionHistoryFileEdited[];
+  commandsRun?: Array<{
+    command: string;
+    exitCode: number;
+    stdoutSummary?: string;
+  }>;
+  issuesDiagnosed?: ActionHistoryIssue[];
+  fixesApplied?: ActionHistoryFix[];
+}
+
+export interface ProjectScopeStep {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'completed' | 'in_progress' | 'pending';
+  completedAt?: string;
+}
+
+export interface ProjectScope {
+  id: string;
+  title: string;
+  activeTask: string;
+  steps: ProjectScopeStep[];
+  percentage: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -70,6 +128,8 @@ export interface ChatMessage {
   pipeline?: AgenticSquadPipeline;
   toolCalls?: AgentToolCall[];
   dialogue?: InterAgentMessage[];
+  actionHistory?: ActionHistoryItem;
+  projectScopeUpdate?: Partial<ProjectScope>;
 }
 
 export interface ChatSession {

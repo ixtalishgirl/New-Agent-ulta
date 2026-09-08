@@ -121,6 +121,17 @@ export const SQUAD_CATALOG_ITEMS = [
     strengths: SQUAD_MEMBERS.uiReviewer.strengths,
     provider: 'nvidia' as const,
   },
+  {
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nvidia/nemotron-3-super-120b-a12b',
+    category: 'Flagship Reasoning & Coding' as const,
+    roleInSquad: 'Deep Logic' as any,
+    parameters: '120B MoE (NVIDIA NIM)',
+    speedRating: 'Frontier 120B Reasoning & Code Synthesis',
+    description: 'NVIDIA Nemotron 3 Super 120B: Ultra-large 120B parameters model built for deep multi-step reasoning, simultaneous code understanding & generation, and live URL website deconstruction/cloning.',
+    strengths: ['120B Super Reasoning', 'Dual Code Comprehension & Writing', 'URL Website Cloning Engine', 'Complex Logic & Math'],
+    provider: 'nvidia' as const,
+  },
 ];
 
 // ==========================================
