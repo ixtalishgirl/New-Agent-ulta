@@ -44,7 +44,11 @@ import {
   ShieldAlert,
   Cpu,
   ChevronRight,
-  Key
+  Key,
+  FolderKanban,
+  Server,
+  Stethoscope,
+  BookOpen
 } from 'lucide-react';
 import { 
   AttachedFile, 
@@ -61,6 +65,7 @@ import {
 } from '../types';
 import { WorkspaceExplorer } from './WorkspaceExplorer';
 import { PowersSuite } from './PowersSuite';
+import { ProjectStudioView } from './ProjectStudioView';
 import { ScreenshotModal } from './ScreenshotModal';
 import { ActionHistoryCard } from './ActionHistoryCard';
 import { FullProcessModal } from './FullProcessModal';
@@ -164,7 +169,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
   const [previewKey, setPreviewKey] = useState<number>(1);
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes'>('preview');
+  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes' | 'project'>('preview');
+  const [projectStudioSubTab, setProjectStudioSubTab] = useState<'files' | 'backend' | 'diagnostics' | 'guide'>('files');
   const [autoSelectWorkspaceFile, setAutoSelectWorkspaceFile] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -2883,6 +2889,18 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             </button>
 
             <button
+              id="tab-project-btn"
+              onClick={() => setActivePane('project')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'project' ? 'bg-zinc-900 text-purple-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5 text-purple-400" />
+              <span>Project Raw Files</span>
+              <span className="hidden sm:inline px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[9px] font-mono">Sandbox</span>
+            </button>
+
+            <button
               id="tab-terminal-btn"
               onClick={() => setActivePane('terminal')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
@@ -2897,11 +2915,11 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               id="tab-code-btn"
               onClick={() => setActivePane('code')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                activePane === 'code' ? 'bg-zinc-900 text-purple-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+                activePane === 'code' ? 'bg-zinc-900 text-zinc-300 border border-zinc-800' : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <Code2 className="w-3.5 h-3.5 text-purple-400" />
-              <span>Code & Files</span>
+              <Code2 className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Workspace Files</span>
             </button>
           </div>
 
@@ -3006,6 +3024,62 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     title="Open Live App in Standalone Tab"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Project Sandbox Location & Quick Tools Bar */}
+              <div className="mb-2 px-3 py-1.5 bg-zinc-950/90 border border-purple-900/30 rounded-xl flex items-center justify-between gap-2 text-xs font-mono shrink-0 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                  <span className="text-zinc-400 text-[11px]">Active Project:</span>
+                  <span className="text-purple-300 font-semibold text-[11px]">workspace/projects/active/</span>
+                  <span className="hidden md:inline text-zinc-600 text-[10px]">• Isolated Website Structure (Packable to ZIP)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      setProjectStudioSubTab('files');
+                      setActivePane('project');
+                    }}
+                    className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-purple-950/40 text-purple-300 text-[10px] border border-purple-900/40 transition cursor-pointer flex items-center gap-1"
+                    title="View and edit raw project files"
+                  >
+                    <FolderKanban className="w-3 h-3" />
+                    <span>Raw Files</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProjectStudioSubTab('backend');
+                      setActivePane('project');
+                    }}
+                    className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-cyan-950/40 text-cyan-300 text-[10px] border border-cyan-900/40 transition cursor-pointer flex items-center gap-1"
+                    title="Inspect backend Express server and test REST APIs"
+                  >
+                    <Server className="w-3 h-3" />
+                    <span>Backend API</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProjectStudioSubTab('diagnostics');
+                      setActivePane('project');
+                    }}
+                    className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-emerald-950/40 text-emerald-400 text-[10px] border border-emerald-900/40 transition cursor-pointer flex items-center gap-1"
+                    title="Run automated bug bounty and AST code fix"
+                  >
+                    <Stethoscope className="w-3 h-3" />
+                    <span>Bug Fixer</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProjectStudioSubTab('guide');
+                      setActivePane('project');
+                    }}
+                    className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-900 hover:bg-amber-950/40 text-amber-300 text-[10px] border border-amber-900/40 transition cursor-pointer"
+                    title="Architecture & Execution Guide"
+                  >
+                    <BookOpen className="w-3 h-3" />
+                    <span>Guide</span>
                   </button>
                 </div>
               </div>
@@ -3272,6 +3346,17 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     }`}
                   >
                     📁 Workspace Files
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProjectStudioSubTab('files');
+                      setActivePane('project');
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs font-mono transition cursor-pointer text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 flex items-center gap-1.5"
+                    title="Open dedicated project workspace"
+                  >
+                    <FolderKanban className="w-3 h-3" />
+                    <span>📁 Project Studio</span>
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3583,6 +3668,22 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                 onRunInTerminal={(cmd) => {
                   setActivePane('terminal');
                   handleRunTerminalCommand(cmd);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Viralux Dedicated Project Studio Pane (Raw Files, Backend API, Diagnostics, Guide) */}
+          {activePane === 'project' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-black">
+              <ProjectStudioView
+                initialSubTab={projectStudioSubTab}
+                onRunTerminalCommand={(cmd) => {
+                  setActivePane('terminal');
+                  handleRunTerminalCommand(cmd);
+                }}
+                onPreviewRefresh={() => {
+                  handleRunCode();
                 }}
               />
             </div>

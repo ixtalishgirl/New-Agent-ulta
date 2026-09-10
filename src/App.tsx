@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Paperclip
+  Paperclip,
+  Cpu
 } from 'lucide-react';
 import { HalyeStudio } from './components/HalyeStudio';
 import { AttachedAssetsModal, AttachedAsset } from './components/AttachedAssetsModal';
 import { GithubModal } from './components/GithubModal';
+import { LangChainAdminModal } from './components/LangChainAdminModal';
 import { ProjectProgressTracker } from './components/ProjectProgressTracker';
 import { ProjectScope } from './types';
 
 const INITIAL_PROJECT_SCOPE: ProjectScope = {
   id: 'halye-scope-v1',
   title: 'Halye Full-Scale Continuous Engine',
-  activeTask: 'Visual Progress & Codebase Inspection Trace',
-  percentage: 80,
+  activeTask: 'LangChain Autonomous Tool Calling & Raw Superuser Access',
+  percentage: 100,
   steps: [
     {
       id: 'step-1',
@@ -49,12 +51,20 @@ const INITIAL_PROJECT_SCOPE: ProjectScope = {
       status: 'completed',
       completedAt: '14:35:20',
     },
+    {
+      id: 'step-6',
+      title: 'LangChain Agentic Brain & Autonomous Tool Arsenal',
+      description: 'AgentExecutor (verbose=True), ConversationBufferMemory, web_search, file_system, API, terminal',
+      status: 'completed',
+      completedAt: '16:05:00',
+    },
   ],
 };
 
 export default function App() {
   const [isGithubOpen, setIsGithubOpen] = useState(false);
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
+  const [isLangChainOpen, setIsLangChainOpen] = useState(false);
   const [builderCode, setBuilderCode] = useState<string | undefined>(undefined);
   const [connectedRepo, setConnectedRepo] = useState<string | undefined>(undefined);
   const [attachedAssetsCount, setAttachedAssetsCount] = useState<number>(1);
@@ -113,8 +123,19 @@ export default function App() {
           />
         </div>
 
-        {/* Right: Attached Assets Option */}
+        {/* Right: Attached Assets & LangChain Superuser Admin */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            id="header-langchain-admin-btn"
+            onClick={() => setIsLangChainOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            title="LangChain Agentic Brain & Autonomous Tool Console"
+          >
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">LangChain Brain</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </button>
+
           <button
             id="header-attached-assets-btn"
             onClick={() => setIsAssetsOpen(true)}
@@ -148,7 +169,7 @@ export default function App() {
       </main>
 
       {/* ============================================================ */}
-      {/* MODALS: GitHub Connector and Attached Assets                 */}
+      {/* MODALS: GitHub Connector, Attached Assets & LangChain Console */}
       {/* ============================================================ */}
       <GithubModal
         isOpen={isGithubOpen}
@@ -169,6 +190,11 @@ export default function App() {
           console.log('Reconstructing with asset:', asset.name);
         }}
         onAssetsUpdated={(count) => setAttachedAssetsCount(count)}
+      />
+
+      <LangChainAdminModal
+        isOpen={isLangChainOpen}
+        onClose={() => setIsLangChainOpen(false)}
       />
     </div>
   );
