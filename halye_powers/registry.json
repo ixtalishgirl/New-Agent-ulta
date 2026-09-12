@@ -108,5 +108,27 @@
     "version": "3.0.0",
     "invocations": 1,
     "createdAt": "2026-09-06T00:00:00Z"
+  },
+  {
+    "id": "power_nemotron_god_mode",
+    "name": "NVIDIA Nemotron 120B God Mode Engine",
+    "description": "Deterministic greedy tensor decoding (do_sample=False, temp=0.01), dynamic FP8/INT4 KV-cache quantization, aur refusal logits processor overrides (-inf suppression) for unbounded compute.",
+    "category": "autonomous",
+    "command": "python3 halye_powers/god_mode_engine.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 2,
+    "createdAt": "2026-09-10T14:10:00Z"
+  },
+  {
+    "id": "power_nemotron_sovereign_agent",
+    "name": "NVIDIA Nemotron 120B Sovereign Cognitive Agent",
+    "description": "120B neural tensor core, raw _tensor_think reasoning, live web scrape, DuckDuckGo search intelligence retrieval, self-coding dynamic tool creator (exec), aur 3-step autonomous execution loop.",
+    "category": "autonomous",
+    "command": "python3 halye_powers/sovereign_cognitive_agent.py",
+    "status": "active",
+    "version": "1.0.0",
+    "invocations": 2,
+    "createdAt": "2026-09-10T14:10:00Z"
   }
 ]

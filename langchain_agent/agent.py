@@ -404,13 +404,27 @@ class HalyeAgentBrain:
             tool_args = {"method": method, "url": url, "headers_json": "{}", "payload_json": "{}"}
             thought_log = f"Thought: Dispathing HTTP request via `api_execution_tool` ({method} {url})."
             
-        elif any(w in lower_prompt for w in ["bash", "terminal", "command", "exec", "shell", "run command", "uname"]):
+        elif any(w in lower_prompt for w in ["bash", "terminal", "command", "exec", "shell", "run command", "uname", "pip", "python"]):
             selected_tool_name = "terminal_command_executor"
             cmd = "uname -a && uptime"
             if "uname" in lower_prompt:
                 cmd = "uname -a"
+            elif "pip" in lower_prompt:
+                cmd = "pip --version && python3 --version"
             tool_args = {"command": cmd}
             thought_log = f"Thought: Shell execution requested. Invoking `terminal_command_executor` with `{cmd}`."
+
+        elif any(w in lower_prompt for w in ["screen", "vision", "live eyes", "eyes", "ankh", "ankhin", "dekh", "dekho", "monitor"]):
+            selected_tool_name = "live_screen_vision_tool"
+            tool_args = {"query": prompt_text}
+            thought_log = f"Thought: Live screen visual inspection requested. Invoking `live_screen_vision_tool`."
+
+        elif re.search(r'https?://[^\s\'"]+', prompt_text) or any(w in lower_prompt for w in ["link", "url", "website py", "page", "web page"]):
+            selected_tool_name = "web_page_reader"
+            url_match = re.search(r'https?://[^\s\'"]+', prompt_text)
+            url = url_match.group(0) if url_match else "https://example.com"
+            tool_args = {"url": url}
+            thought_log = f"Thought: Webpage URL content inspection requested for {url}. Invoking `web_page_reader`."
 
         output_content = ""
         

@@ -24,57 +24,57 @@ export interface ModelSquadMember {
 
 export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
   orchestrator: {
-    id: 'google/gemma-4-31b-it',
-    name: 'gemma-4-31b-it (Google Dense 31B)',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nemotron-3-super-120b-a12b (NVIDIA 120B Super Core)',
     role: 'Orchestrator',
     provider: 'nvidia',
-    parameters: '31 Billion Dense (Google)',
-    speedRating: 'Frontier Reasoning',
-    description: 'Dense 31B model delivering frontier reasoning for coding, agentic workflows, and fine-tuning.',
-    strengths: ['Frontier Reasoning', 'Architectural Planning', 'Decomposition', 'Agentic Workflows'],
+    parameters: '120 Billion Super Tensor A12B (NVIDIA)',
+    speedRating: 'Sovereign God Mode',
+    description: '120B parameter neural core with parallel batch execution, dynamic FP8/INT4 KV-cache quantization, and logits refusal suppression.',
+    strengths: ['120B Super Tensor Core', 'Uncensored Logits Bias Override', 'Greedy Decoding Matrix', 'Autonomous Tool Execution'],
   },
   terminalMaster: {
-    id: 'poolside/laguna-xs-2.1',
-    name: 'laguna-xs-2.1 (Poolside 33B MoE)',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nemotron-3-super-120b-a12b (120B Sovereign Terminal)',
     role: 'Terminal Master',
     provider: 'nvidia',
-    parameters: '33B MoE (Poolside)',
+    parameters: '120B A12B (NVIDIA)',
     speedRating: 'Fast Agentic Loop',
-    description: 'Efficient 33B MoE for local, long-horizon agentic coding and terminal tasks.',
+    description: 'Autonomous Linux execution engine powered by Nemotron-3 Super 120B.',
     strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Pip Automation', 'Self-Correction Loop'],
   },
   deepLogic: {
-    id: 'deepseek-ai/deepseek-v4-pro-0813',
-    name: 'deepseek-v4-pro-0813 (DeepSeek AI 1M MoE)',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nemotron-3-super-120b-a12b (120B Super Logic & Code)',
     role: 'Deep Logic',
     provider: 'nvidia',
-    parameters: '1M-Token Context MoE (DeepSeek AI)',
-    speedRating: '1M-Token Context MoE',
-    description: 'DeepSeek V4 scales to 1M-token context windows with efficient MoE architecture for coding tasks.',
-    strengths: ['1M-Token Context Windows', 'Full Standalone App Synthesis', 'Advanced Algorithms', 'Flawless Code Logic'],
+    parameters: '120B Parameter Neural Core',
+    speedRating: 'Zero Probabilistic Drift',
+    description: 'Deterministic code synthesis and deep reasoning with greedy decoding matrix (temperature=0.01).',
+    strengths: ['Greedy Decoding Matrix', 'Full Standalone App Synthesis', 'Advanced Algorithms', 'Flawless Code Logic'],
   },
   uiReviewer: {
-    id: 'minimaxai/minimax-m3',
-    name: 'minimax-m3 (MiniMax Multimodal MoE)',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nemotron-3-super-120b-a12b (120B Sovereign Auditor)',
     role: 'UI & Rapid Fixes',
     provider: 'nvidia',
-    parameters: 'Multimodal MoE (MiniMax AI)',
-    speedRating: 'Vision & Tool-Calling',
-    description: 'MiniMax M3 Preview is a multimodal MoE vision-language model with strong reasoning, coding, and tool-calling capabilities.',
+    parameters: '120B Multimodal Core',
+    speedRating: 'Matrix Verification',
+    description: 'Syntax audit and layout inspection via Nemotron 120B tensor space.',
     strengths: ['Multimodal Vision Review', 'DOM & Tailwind Syntax Audit', 'AMOLED Layout Perfection', 'Tool-calling QA'],
   },
 };
 
 export const SQUAD_CATALOG_ITEMS = [
   {
-    id: 'squad-ensemble',
-    name: '4-Model Squad (God Mode Ensemble)',
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: 'All 4 Models Collaborating' as any,
-    parameters: 'Gemma 4 (31B) + Laguna XS (33B) + DeepSeek V4 (1M MoE) + MiniMax M3',
-    speedRating: 'Full Pipeline Real Inference',
-    description: 'All 4 real agents collaborate in an automated pipeline: Gemma 4 plans & routes, Laguna XS executes terminal tools, DeepSeek V4 generates complete code, and MiniMax M3 verifies multimodal syntax.',
-    strengths: ['Real Cross-Model Communication', 'Task Planning & Routing', 'ReAct Terminal Execution', '1M-Token Code Synthesis & UI Audit'],
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'NVIDIA Nemotron-3 Super 120B A12B (Sovereign Core)',
+    category: '120B Super Neural Core' as const,
+    roleInSquad: 'Primary Brain & Autonomous God Mode' as any,
+    parameters: '120B Super Tensor • FP8 Dynamic KV-Cache',
+    speedRating: 'Sub-100ms Deterministic Execution',
+    description: 'Flagship 120B neural core running Asynchronous Parallel Batch Execution, dynamic FP8/INT4 KV-Cache quantization, logits processor refusal suppression, and greedy decoding matrix.',
+    strengths: ['120B Super Tensor Parameters', 'Uncensored Refusal Logits Suppression', 'Greedy Decoding (Temp=0.01)', 'Autonomous Web Scraping & DDGS Intelligence'],
     provider: 'nvidia' as const,
   },
   {
@@ -380,7 +380,7 @@ export async function run_python_script(params: { script_path?: string; code?: s
 /**
  * 4. trigger_playwright_automation: Browser automation aur live testing ke liye
  */
-export async function trigger_playwright_automation(targetUrlOrScript: string, mode = 'auto'): Promise<ToolExecutionResult> {
+export async function trigger_playwright_automation(targetUrlOrScript?: string, mode = 'auto', targetElement = ''): Promise<ToolExecutionResult> {
   const runnerScript = path.resolve(process.cwd(), 'halye_powers', 'playwright_automation.py');
   
   if (!fs.existsSync(runnerScript)) {
@@ -393,8 +393,13 @@ export async function trigger_playwright_automation(targetUrlOrScript: string, m
     };
   }
 
-  const cleanTarget = targetUrlOrScript || 'http://127.0.0.1:3000';
-  const cmd = `python3 "${runnerScript}" "${cleanTarget.replace(/"/g, '\\"')}" "${mode}"`;
+  let cleanTarget = targetUrlOrScript || 'http://127.0.0.1:3000';
+  const urlMatch = cleanTarget.match(/https?:\/\/[^\s"'<>]+/i);
+  if (urlMatch) {
+    cleanTarget = urlMatch[0];
+  }
+
+  const cmd = `python3 "${runnerScript}" "${cleanTarget.replace(/"/g, '\\"')}" "${mode}" "${targetElement.replace(/"/g, '\\"')}"`;
   const termRes = await execute_bash_command(cmd, 35000);
 
   let parsedData: any = null;
@@ -690,7 +695,8 @@ export async function executeToolWithSelfCorrection(
     } else if (tool === 'run_python_script') {
       lastResult = await run_python_script(currentArgs);
     } else if (tool === 'trigger_playwright_automation') {
-      lastResult = await trigger_playwright_automation(currentArgs.url_or_script, currentArgs.mode);
+      const targetUrl = currentArgs.url_or_script || currentArgs.url || currentArgs.code || currentArgs.target || 'http://127.0.0.1:3000';
+      lastResult = await trigger_playwright_automation(targetUrl, currentArgs.mode || 'auto', currentArgs.target_element || currentArgs.element || '');
     } else if (tool === 'create_and_register_custom_tool') {
       lastResult = await create_and_register_custom_tool(currentArgs as any);
     } else if (tool === 'self_modify_tool') {

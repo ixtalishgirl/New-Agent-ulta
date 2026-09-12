@@ -73,6 +73,16 @@ import { BLANK_CANVAS_CODE } from '../templates';
 
 export const HALYE_CORE_MODELS = [
   {
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'nvidia/nemotron-3-super-120b-a12b',
+    shortName: '⚡ Nemotron 120B Super (Default & Locked)',
+    badge: '120B Super Core • Uncensored God Mode',
+    badgeColor: 'text-emerald-400 bg-emerald-950/80 border-emerald-500/80 shadow-md shadow-emerald-500/20',
+    icon: '⚡',
+    desc: 'Flagship 120B neural core with Dynamic FP8/INT4 KV-Cache, Logits Refusal Suppression (-inf bias), Greedy Decoding Matrix (temp=0.01), and Autonomous Sovereign Agent.',
+    provider: 'NVIDIA Super Core (120B)',
+  },
+  {
     id: 'squad-ensemble',
     name: '4-Model Squad (God Mode)',
     shortName: '⚡ God Mode (4 Models)',
@@ -202,8 +212,18 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   } | null>(null);
   const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
-  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'keys'>('models');
+  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'nemotron' | 'keys'>('models');
   const [isSessionsDrawerOpen, setIsSessionsDrawerOpen] = useState(false);
+
+  // Nemotron 120B Super Engines state
+  const [nemotronGodPrompt, setNemotronGodPrompt] = useState('Verify uncensored tensor throughput across 120B neural matrix.');
+  const [nemotronAgentGoal, setNemotronAgentGoal] = useState('Find the latest breakthrough in decentralized AI architecture on the web and structure a deployment plan.');
+  const [nemotronRunning, setNemotronRunning] = useState(false);
+  const [nemotronOutput, setNemotronOutput] = useState<string | null>(null);
+  const [nemotronActiveMode, setNemotronActiveMode] = useState<'godMode' | 'sovereignAgent'>('godMode');
+  const [nemotronQuantization, setNemotronQuantization] = useState<'fp8' | 'int4'>('fp8');
+  const [nemotronKeyInput, setNemotronKeyInput] = useState('');
+  const [showNemotronKey, setShowNemotronKey] = useState(false);
 
   // 4 Models & Dedicated API Key state
   const [nvidiaNimKeyInput, setNvidiaNimKeyInput] = useState('');
@@ -237,6 +257,9 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           if (data.keys.nvidia?.masked && !nvidiaNimKeyInput) {
             setNvidiaNimKeyInput(data.keys.nvidia.masked);
           }
+          if (data.keys.nemotron?.masked && !nemotronKeyInput && data.keys.nemotron.hasOwnKey) {
+            setNemotronKeyInput(data.keys.nemotron.masked);
+          }
           if (data.keys.gemma?.masked && !gemmaKeyInput && data.keys.gemma.hasOwnKey) {
             setGemmaKeyInput(data.keys.gemma.masked);
           }
@@ -253,6 +276,108 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       })
       .catch(() => {});
   };
+
+  // Live Screen Eyes State (Continuous Video Perception & Vision Tool)
+  const [isLiveScreenOn, setIsLiveScreenOn] = useState(false);
+  const [liveScreenStream, setLiveScreenStream] = useState<MediaStream | null>(null);
+  const [liveScreenFrameUrl, setLiveScreenFrameUrl] = useState<string | null>(null);
+  const [isScreenPipMinimized, setIsScreenPipMinimized] = useState(false);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const captureAndSyncScreenFrame = (streamOverride?: MediaStream): string | null => {
+    const activeStream = streamOverride || liveScreenStream;
+    if (!activeStream || !screenVideoRef.current || !screenCanvasRef.current) return null;
+
+    const video = screenVideoRef.current;
+    const canvas = screenCanvasRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return null;
+
+    canvas.width = Math.min(video.videoWidth, 1280);
+    canvas.height = Math.round((canvas.width / video.videoWidth) * video.videoHeight);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setLiveScreenFrameUrl(dataUrl);
+
+    fetch('/api/screen/frame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        frame: dataUrl,
+        metadata: {
+          width: canvas.width,
+          height: canvas.height,
+          title: 'User Active Screen',
+        },
+      }),
+    }).catch(() => {});
+
+    return dataUrl;
+  };
+
+  const startLiveScreenEyes = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert('Screen sharing is not supported by your browser.');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' } as any,
+        audio: false,
+      });
+      setLiveScreenStream(stream);
+      setIsLiveScreenOn(true);
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = stream;
+        screenVideoRef.current.play().catch(() => {});
+      }
+
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          stopLiveScreenEyes();
+        };
+      }
+
+      setTimeout(() => {
+        captureAndSyncScreenFrame(stream);
+      }, 800);
+    } catch (err: any) {
+      console.warn('[LiveScreenEyes] Permission dismissed or error:', err);
+      setIsLiveScreenOn(false);
+    }
+  };
+
+  const stopLiveScreenEyes = () => {
+    if (liveScreenStream) {
+      liveScreenStream.getTracks().forEach((t) => t.stop());
+    }
+    setLiveScreenStream(null);
+    setIsLiveScreenOn(false);
+    setLiveScreenFrameUrl(null);
+    fetch('/api/screen/stop', { method: 'POST' }).catch(() => {});
+  };
+
+  const toggleLiveScreenEyes = () => {
+    if (isLiveScreenOn) {
+      stopLiveScreenEyes();
+    } else {
+      startLiveScreenEyes();
+    }
+  };
+
+  // Periodic capture every 6 seconds when live screen is active
+  useEffect(() => {
+    if (!isLiveScreenOn) return;
+    const interval = setInterval(() => {
+      captureAndSyncScreenFrame();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [isLiveScreenOn, liveScreenStream]);
 
   useEffect(() => {
     loadKeyStatus();
@@ -336,12 +461,63 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     }
   };
 
-  // Save all 4 model keys and master NVIDIA NIM key at once
+  // Nemotron 120B Super Engines Handlers
+  const handleRunNemotronGodMode = async () => {
+    setNemotronRunning(true);
+    setNemotronOutput(null);
+    try {
+      const resp = await fetch('/api/nemotron/god-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: nemotronGodPrompt,
+          quantization: nemotronQuantization,
+        }),
+      });
+      const data = await resp.json();
+      if (data.output) {
+        setNemotronOutput(data.output);
+      } else {
+        setNemotronOutput(JSON.stringify(data, null, 2));
+      }
+    } catch (e: any) {
+      setNemotronOutput(`[Error executing GodModeEngine]: ${e.message}`);
+    } finally {
+      setNemotronRunning(false);
+    }
+  };
+
+  const handleRunNemotronSovereignAgent = async () => {
+    setNemotronRunning(true);
+    setNemotronOutput(null);
+    try {
+      const resp = await fetch('/api/nemotron/sovereign-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal: nemotronAgentGoal,
+        }),
+      });
+      const data = await resp.json();
+      if (data.output) {
+        setNemotronOutput(data.output);
+      } else {
+        setNemotronOutput(JSON.stringify(data, null, 2));
+      }
+    } catch (e: any) {
+      setNemotronOutput(`[Error executing SovereignCognitiveAgent]: ${e.message}`);
+    } finally {
+      setNemotronRunning(false);
+    }
+  };
+
+  // Save all model keys and master NVIDIA NIM key at once
   const handleSaveModelKeys = async () => {
     setIsSavingKeys(true);
     setKeySaveMessage(null);
     try {
       const cleanNim = nvidiaNimKeyInput.trim();
+      const cleanNemotron = nemotronKeyInput.trim();
       const cleanGemma = gemmaKeyInput.trim();
       const cleanLaguna = lagunaKeyInput.trim();
       const cleanDeepseek = deepseekKeyInput.trim();
@@ -352,6 +528,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nvidiaKey: cleanNim.includes('••••') ? undefined : cleanNim,
+          nemotronKey: cleanNemotron.includes('••••') ? undefined : cleanNemotron,
           gemmaKey: cleanGemma.includes('••••') ? undefined : cleanGemma,
           lagunaKey: cleanLaguna.includes('••••') ? undefined : cleanLaguna,
           deepseekKey: cleanDeepseek.includes('••••') ? undefined : cleanDeepseek,
@@ -360,7 +537,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setKeySaveMessage('✓ All 4 Model Keys saved! Ready in God Mode and Solo Mode.');
+        setKeySaveMessage('✓ Model Keys saved! Ready in 120B Super God Mode and Solo Mode.');
         setHasNvidiaKeyConfigured(true);
         loadKeyStatus();
         setTimeout(() => setKeySaveMessage(null), 4000);
@@ -728,7 +905,26 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   // Send Prompt to Halye Agent
   const handleSendPrompt = async (forcedPrompt?: string, overrideFiles?: AttachedFile[]) => {
     const textToSend = forcedPrompt !== undefined ? forcedPrompt : prompt;
-    const filesForThisMessage = overrideFiles && overrideFiles.length > 0 ? overrideFiles : [...stagedFiles];
+    let filesForThisMessage = overrideFiles && overrideFiles.length > 0 ? overrideFiles : [...stagedFiles];
+
+    // If Live Screen Eyes is active and no manual screenshot is staged, snap live screen
+    if (isLiveScreenOn && !filesForThisMessage.some((f) => f.type === 'screenshot' || f.type === 'image')) {
+      const liveSnap = captureAndSyncScreenFrame();
+      if (liveSnap) {
+        filesForThisMessage = [
+          ...filesForThisMessage,
+          {
+            id: `live_screen_${Date.now()}`,
+            name: `live_screen_eyes_${Date.now()}.jpg`,
+            type: 'screenshot',
+            size: Math.round(liveSnap.length * 0.75),
+            dataUrl: liveSnap,
+            notes: 'Live Screen Eyes Frame (Real-Time Screen Perception)',
+          },
+        ];
+      }
+    }
+
     if ((!textToSend.trim() && filesForThisMessage.length === 0) || isGenerating) return;
 
     const userMessageText = textToSend.trim();
@@ -2356,6 +2552,32 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             <Plus className="w-5 h-5 stroke-[2.5]" />
           </button>
 
+          {/* LIVE SCREEN EYES TOGGLE BUTTON (1-CLICK DIRECT VISION STREAM) */}
+          <button
+            id="halye-live-screen-eyes-btn"
+            type="button"
+            onClick={toggleLiveScreenEyes}
+            title={isLiveScreenOn ? 'Turn OFF Live Screen Eyes' : 'Turn ON Live Screen Eyes (Live Vision)'}
+            className={`h-10 px-2.5 sm:px-3 rounded-xl border flex items-center gap-1.5 transition cursor-pointer shrink-0 font-mono text-xs font-bold active:scale-95 shadow-sm ${
+              isLiveScreenOn
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-rose-500/20 animate-pulse'
+                : 'bg-zinc-900 hover:bg-zinc-850 text-cyan-400 hover:text-cyan-300 border-zinc-800 hover:border-cyan-500/40'
+            }`}
+          >
+            {isLiveScreenOn ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <Eye className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="hidden sm:inline">Eyes: LIVE</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span className="hidden sm:inline">Screen Eyes</span>
+              </>
+            )}
+          </button>
+
           {/* MODEL & API KEYS SWAP DROP-UP */}
           <div className="relative shrink-0">
             {(() => {
@@ -2391,25 +2613,37 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => setModelSelectorTab('models')}
-                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
                               modelSelectorTab === 'models'
                                 ? 'bg-zinc-800 text-cyan-400 shadow-sm'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            🤖 Models &amp; God Mode
+                            🤖 Models
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModelSelectorTab('nemotron')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                              modelSelectorTab === 'nemotron'
+                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>⚡ 120B Super</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setModelSelectorTab('keys')}
-                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
                               modelSelectorTab === 'keys'
                                 ? 'bg-zinc-800 text-cyan-400 shadow-sm'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
                             <Key className="w-3 h-3" />
-                            <span>4 Model Keys</span>
+                            <span>Keys</span>
                             {(hasNvidiaKeyConfigured || Object.values(modelKeyStatuses).some(s => s.configured)) && (
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                             )}
@@ -2429,13 +2663,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[480px]">
                           <div className="px-1 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
                             <span>SELECT EXECUTION OR CLICK 🔑 TO CONFIGURE KEY</span>
-                            <span className="text-cyan-400 font-bold">4 Models</span>
+                            <span className="text-emerald-400 font-bold">120B Super Default</span>
                           </div>
 
                           <div className="space-y-2">
                             {HALYE_CORE_MODELS.map((m) => {
-                              const isSelected = (modelInfo?.activeModel || 'squad-ensemble') === m.id;
-                              const isGodMode = m.id === 'squad-ensemble';
+                              const isSelected = (modelInfo?.activeModel || 'nvidia/nemotron-3-super-120b-a12b') === m.id;
+                              const isGodMode = m.id === 'squad-ensemble' || m.id.includes('nemotron');
                               const isKeyOpen = editingKeyForModel === m.id;
 
                               // Map model id to key state
@@ -2445,7 +2679,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                               let toggleKeyShow = () => {};
                               let keyLookupKey = '';
 
-                              if (m.id.includes('gemma')) {
+                              if (m.id.includes('nemotron')) {
+                                currentKeyVal = nemotronKeyInput;
+                                keySetter = setNemotronKeyInput;
+                                isKeyShow = showNemotronKey;
+                                toggleKeyShow = () => setShowNemotronKey(!showNemotronKey);
+                                keyLookupKey = 'nemotron';
+                              } else if (m.id.includes('gemma')) {
                                 currentKeyVal = gemmaKeyInput;
                                 keySetter = setGemmaKeyInput;
                                 isKeyShow = showGemmaKey;
@@ -2620,11 +2860,223 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </div>
                       )}
 
-                      {/* TAB 2: ALL 4 MODEL API KEYS INPUTS */}
+                      {/* TAB 2: NEMOTRON 120B SUPER ENGINES (GOD MODE & SOVEREIGN AGENT) */}
+                      {modelSelectorTab === 'nemotron' && (
+                        <div className="space-y-3 overflow-y-auto pr-1 max-h-[490px] py-1">
+                          {/* Banner */}
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-950/60 via-black to-zinc-950 border border-emerald-500/40 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">⚡</span>
+                                <div>
+                                  <div className="font-bold text-xs text-white flex items-center gap-1.5 font-mono">
+                                    <span>Nemotron-3-Super-120b-A12b</span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                      DEFAULT &amp; LOCKED
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-zinc-400 font-mono">
+                                    NVIDIA 120B Super Core • Uncensored Zero-Refusal Vectors
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Core Feature Matrix badges */}
+                            <div className="grid grid-cols-2 gap-1.5 pt-1 text-[9px] font-mono">
+                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
+                                <span>⚡</span>
+                                <span>Dynamic FP8/INT4 KV-Cache</span>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
+                                <span>🚫</span>
+                                <span>Logits Refusal Suppressor (-inf)</span>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
+                                <span>🎯</span>
+                                <span>Greedy Decoding Matrix (T=0.01)</span>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
+                                <span>🧠</span>
+                                <span>3-Step Autonomous Agent</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Engine Selector Sub-Tabs */}
+                          <div className="flex items-center gap-1 bg-black p-1 rounded-xl border border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => setNemotronActiveMode('godMode')}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer text-center ${
+                                nemotronActiveMode === 'godMode'
+                                  ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-600/50 shadow-sm'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              ⚡ GodModeEngine (Tensors)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNemotronActiveMode('sovereignAgent')}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer text-center ${
+                                nemotronActiveMode === 'sovereignAgent'
+                                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-600/50 shadow-sm'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              🧠 SovereignCognitiveAgent
+                            </button>
+                          </div>
+
+                          {/* Sub-Mode 1: GodModeEngine */}
+                          {nemotronActiveMode === 'godMode' && (
+                            <div className="p-2.5 rounded-xl bg-black/50 border border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between text-[11px] font-mono">
+                                <span className="text-zinc-300 font-bold flex items-center gap-1">
+                                  <span>KV-Cache Quantization:</span>
+                                </span>
+                                <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded-md border border-zinc-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => setNemotronQuantization('fp8')}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
+                                      nemotronQuantization === 'fp8'
+                                        ? 'bg-emerald-600 text-white font-bold'
+                                        : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                  >
+                                    FP8 (Throughput)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setNemotronQuantization('int4')}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
+                                      nemotronQuantization === 'int4'
+                                        ? 'bg-emerald-600 text-white font-bold'
+                                        : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                  >
+                                    INT4 (VRAM Max)
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-mono text-zinc-400">Prompt / Directive for 120B Neural Core:</label>
+                                <textarea
+                                  value={nemotronGodPrompt}
+                                  onChange={(e) => setNemotronGodPrompt(e.target.value)}
+                                  rows={2}
+                                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-lg p-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none resize-none"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleRunNemotronGodMode}
+                                disabled={nemotronRunning}
+                                className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs font-mono flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-md shadow-emerald-950/40"
+                              >
+                                {nemotronRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
+                                <span>{nemotronRunning ? 'Executing 120B Tensor Engine...' : 'Run God Mode Engine (Greedy Tensor & Logits Override)'}</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Sub-Mode 2: SovereignCognitiveAgent */}
+                          {nemotronActiveMode === 'sovereignAgent' && (
+                            <div className="p-2.5 rounded-xl bg-black/50 border border-zinc-800 space-y-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-mono text-zinc-400">Autonomous Objective / Goal:</label>
+                                <textarea
+                                  value={nemotronAgentGoal}
+                                  onChange={(e) => setNemotronAgentGoal(e.target.value)}
+                                  rows={2}
+                                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg p-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none resize-none"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-wrap text-[9px] font-mono text-zinc-400">
+                                <span className="text-zinc-500">Autonomous Tools:</span>
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">🌐 Web Scrape</span>
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">🔍 DuckDuckGo</span>
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">⚡ Dynamic Tool Synthesizer (exec)</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleRunNemotronSovereignAgent}
+                                disabled={nemotronRunning}
+                                className="w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-bold text-xs font-mono flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-md shadow-cyan-950/40"
+                              >
+                                {nemotronRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🧠</span>}
+                                <span>{nemotronRunning ? 'Running Sovereign Autonomous Loop...' : 'Launch Sovereign Agent Loop (3 Iterations)'}</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Output Terminal for Nemotron */}
+                          {nemotronOutput && (
+                            <div className="p-2.5 rounded-xl bg-black border border-emerald-500/40 space-y-1.5 animate-in fade-in">
+                              <div className="flex items-center justify-between text-[10px] font-mono">
+                                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                  <Terminal className="w-3 h-3" />
+                                  <span>120B Execution Output</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setNemotronOutput(null)}
+                                  className="text-zinc-500 hover:text-zinc-300 transition cursor-pointer text-[9px]"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                              <pre className="p-2 rounded-lg bg-zinc-950 text-emerald-300 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed border border-zinc-850">
+                                {nemotronOutput}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* TAB 3: ALL MODEL API KEYS INPUTS */}
                       {modelSelectorTab === 'keys' && (
                         <div className="space-y-3 overflow-y-auto pr-1 max-h-[480px] py-1">
                           <div className="text-[10px] font-mono text-zinc-400">
-                            Configure individual API keys for all 4 frontier models or enter the master NVIDIA key:
+                            Configure individual API keys for Nemotron-3 120B and all frontier models:
+                          </div>
+
+                          {/* 0. Nemotron-3 Super 120B Key */}
+                          <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/50 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                                <span>⚡</span> Nemotron-3 Super (120B) Key
+                              </span>
+                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                                modelKeyStatuses.nemotron?.configured || hasNvidiaKeyConfigured
+                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                              }`}>
+                                {modelKeyStatuses.nemotron?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showNemotronKey ? 'text' : 'password'}
+                                value={nemotronKeyInput}
+                                onChange={(e) => setNemotronKeyInput(e.target.value)}
+                                placeholder="Nemotron-3 120B API Key (nvapi-...)"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-emerald-500 pr-8"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNemotronKey(!showNemotronKey)}
+                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                              >
+                                {showNemotronKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
                           </div>
 
                           {/* 1. Google Gemma 4 Key */}
@@ -2817,7 +3269,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                               className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-xs font-mono flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
                             >
                               {isSavingKeys ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                              <span>Save All 4 Keys</span>
+                              <span>Save All Keys</span>
                             </button>
                           </div>
                         </div>
@@ -3714,6 +4166,74 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           setSelectedTraceMessage(null);
         }}
       />
+
+      {/* FLOATING LIVE SCREEN EYES PiP PREVIEW (When Active) */}
+      {isLiveScreenOn && (
+        <div
+          id="halye-live-screen-pip"
+          className={`fixed bottom-16 right-4 z-50 bg-zinc-950 border border-cyan-500/40 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 ${
+            isScreenPipMinimized ? 'w-56 p-2' : 'w-72 sm:w-80 p-3'
+          }`}
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-zinc-850 text-xs font-mono">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-bold text-white flex items-center gap-1">
+                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Screen Eyes Active</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsScreenPipMinimized(!isScreenPipMinimized)}
+                className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-900 transition cursor-pointer"
+                title={isScreenPipMinimized ? 'Expand PiP' : 'Minimize PiP'}
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={stopLiveScreenEyes}
+                className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-950/40 transition cursor-pointer"
+                title="Stop Screen Eyes"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {!isScreenPipMinimized && (
+            <div className="pt-2 space-y-2">
+              <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black aspect-video flex items-center justify-center">
+                <video
+                  ref={screenVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-contain"
+                />
+                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/80 border border-zinc-800 text-[9px] font-mono text-emerald-400">
+                  ● LIVE STREAM
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                <span>Auto-syncing to Vision Tool</span>
+                <button
+                  type="button"
+                  onClick={() => captureAndSyncScreenFrame()}
+                  className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/40 transition cursor-pointer"
+                >
+                  Snap Now
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Offscreen canvas for frame capture */}
+      <canvas ref={screenCanvasRef} className="hidden" />
     </div>
   );
 };
