@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Paperclip,
-  Cpu
+  Cpu,
+  Palette,
+  Zap
 } from 'lucide-react';
 import { HalyeStudio } from './components/HalyeStudio';
 import { AttachedAssetsModal, AttachedAsset } from './components/AttachedAssetsModal';
 import { GithubModal } from './components/GithubModal';
 import { LangChainAdminModal } from './components/LangChainAdminModal';
+import { SelfUpdatePanel } from './components/SelfUpdatePanel';
+import { NemotronKeyPanel } from './components/NemotronKeyPanel';
 import { ProjectProgressTracker } from './components/ProjectProgressTracker';
 import { ProjectScope } from './types';
 
@@ -65,6 +69,9 @@ export default function App() {
   const [isGithubOpen, setIsGithubOpen] = useState(false);
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
   const [isLangChainOpen, setIsLangChainOpen] = useState(false);
+  const [isSelfUpdateOpen, setIsSelfUpdateOpen] = useState(false);
+  const [isNemotronKeyOpen, setIsNemotronKeyOpen] = useState(false);
+  const [nemotronKeyReady, setNemotronKeyReady] = useState(false);
   const [builderCode, setBuilderCode] = useState<string | undefined>(undefined);
   const [connectedRepo, setConnectedRepo] = useState<string | undefined>(undefined);
   const [attachedAssetsCount, setAttachedAssetsCount] = useState<number>(1);
@@ -86,6 +93,19 @@ export default function App() {
       localStorage.setItem('halye_project_scope', JSON.stringify(projectScope));
     } catch (e) {}
   }, [projectScope]);
+
+  const refreshNemotronStatus = () => {
+    fetch('/api/model/keys')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.keys?.nemotron) setNemotronKeyReady(Boolean(data.keys.nemotron.configured));
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshNemotronStatus();
+  }, []);
 
   // When user imports code from GitHub or rebuilds from an Attached Asset
   const handleLoadCodeIntoBuilder = (code: string) => {
@@ -126,6 +146,19 @@ export default function App() {
         {/* Right: Attached Assets & LangChain Superuser Admin */}
         <div className="flex items-center gap-2 shrink-0">
           <button
+            id="header-nemotron-key-btn"
+            onClick={() => setIsNemotronKeyOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            title="Nemotron-3 Super 120B API Key save karein aur live test karein"
+          >
+            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Nemotron Key</span>
+            <span
+              className={`w-2 h-2 rounded-full ${nemotronKeyReady ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}
+            ></span>
+          </button>
+
+          <button
             id="header-langchain-admin-btn"
             onClick={() => setIsLangChainOpen(true)}
             className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
@@ -134,6 +167,16 @@ export default function App() {
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">LangChain Brain</span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </button>
+
+          <button
+            id="header-self-update-btn"
+            onClick={() => setIsSelfUpdateOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            title="Self Update Studio - apna UI theme khud badlo aur rollback karo"
+          >
+            <Palette className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Self Update</span>
           </button>
 
           <button
@@ -195,6 +238,19 @@ export default function App() {
       <LangChainAdminModal
         isOpen={isLangChainOpen}
         onClose={() => setIsLangChainOpen(false)}
+      />
+
+      <SelfUpdatePanel
+        isOpen={isSelfUpdateOpen}
+        onClose={() => setIsSelfUpdateOpen(false)}
+      />
+
+      <NemotronKeyPanel
+        isOpen={isNemotronKeyOpen}
+        onClose={() => {
+          setIsNemotronKeyOpen(false);
+          refreshNemotronStatus();
+        }}
       />
     </div>
   );

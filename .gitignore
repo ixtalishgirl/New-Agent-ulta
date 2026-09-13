@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Secrets and local state — never commit these
+.env
+.env.local
+.env.*.local
+.halye-model-keys.json
+
+# Python caches
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs and OS noise
+*.log
+.DS_Store
+tmp/

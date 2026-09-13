@@ -1,0 +1,15 @@
+{
+  "goal": "banao ek neon space dodge game with shields and particles",
+  "kind": "game",
+  "title": "ek neon space dodge game with shields and particles",
+  "createdBy": "Halye Long-Task Engine",
+  "createdAt": "2026-09-12T13:01:40.190Z",
+  "steps": [
+    "Analyse the goal and lock the deliverable",
+    "Scaffold the output directory and manifest",
+    "Author the playable game build",
+    "Validate the rendered markup",
+    "Repair automatically if validation fails",
+    "Write README and finalise artefacts"
+  ]
+}

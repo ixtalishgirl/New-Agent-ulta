@@ -33,6 +33,70 @@ except ImportError:
         return func
 
 
+def _ddg_html_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    """Scrape the real DuckDuckGo HTML endpoint and parse indexed organic results."""
+    found: List[Dict[str, str]] = []
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+
+        # Each organic result lives in a block carrying the `result__body` class, e.g.
+        # <div class="links_main links_deep result__body"> ... <a class="result__a" href="..">Title</a>
+        # (match the class token itself, since it is not always the only class on the element)
+        blocks = html.split("result__body")[1:]
+        for block in blocks:
+            raw_href = ""
+            title = ""
+            for anchor in re.finditer(r"<a\b([^>]*)>(.*?)</a>", block, re.S):
+                attrs, inner = anchor.group(1), anchor.group(2)
+                if "result__a" not in attrs:
+                    continue
+                href_m = re.search(r'href="([^"]+)"', attrs)
+                if not href_m:
+                    continue
+                raw_href = href_m.group(1)
+                title = re.sub(r"<[^>]+>", "", inner).strip()
+                break
+            if not raw_href:
+                continue
+            snippet_m = re.search(r'class="result__snippet"[^>]*>(.*?)</a>', block, re.S)
+            snippet = re.sub(r"<[^>]+>", "", snippet_m.group(1)).strip() if snippet_m else ""
+
+            # Normalise protocol-relative links first, then unwrap the DuckDuckGo
+            # redirect wrapper (/l/?uddg=<encoded target>) to the real destination.
+            if raw_href.startswith("//"):
+                raw_href = "https:" + raw_href
+            elif raw_href.startswith("/"):
+                raw_href = "https://duckduckgo.com" + raw_href
+
+            target = raw_href
+            if "uddg=" in target:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(target).query)
+                if qs.get("uddg"):
+                    target = urllib.parse.unquote(qs["uddg"][0])
+
+            if title and target.startswith("http"):
+                found.append({
+                    "title": title,
+                    "url": target,
+                    "snippet": snippet,
+                    "source": "DuckDuckGo HTML Index",
+                })
+            if len(found) >= max_results:
+                break
+    except Exception:
+        pass
+    return found
+
+
 @tool
 def web_search(query: str, max_results: int = 5) -> str:
     """
@@ -98,7 +162,11 @@ def web_search(query: str, max_results: int = 5) -> str:
         except Exception:
             pass
 
-    # 3. Yahoo Search HTML fallback if needed
+    # 3. Real DuckDuckGo HTML search (parsed) - returns actual indexed web results
+    if len(results) < max_results:
+        results.extend(_ddg_html_search(cleaned_query, max_results - len(results)))
+
+    # 4. Yahoo Search HTML fallback if still needed
     if len(results) < 2:
         try:
             yahoo_url = f"https://search.yahoo.com/search?p={urllib.parse.quote(cleaned_query)}"
@@ -109,21 +177,24 @@ def web_search(query: str, max_results: int = 5) -> str:
                 for u, t in matches[:max_results]:
                     clean_u = urllib.parse.unquote(u)
                     results.append({
-                        "title": t,
+                        "title": re.sub(r"<[^>]+>", "", t).strip(),
                         "url": clean_u,
-                        "snippet": f"Web reference for {t}",
+                        "snippet": "",
                         "source": "Yahoo Web Index"
                     })
         except Exception:
             pass
 
+    # Never fabricate results: if every live source failed, report that honestly so the
+    # caller (and the model) knows the search did not happen instead of trusting fake data.
     if not results:
-        results.append({
-            "title": f"Live Web Result: {cleaned_query}",
-            "url": f"https://duckduckgo.com/?q={urllib.parse.quote(cleaned_query)}",
-            "snippet": f"Real-time search completed for '{cleaned_query}'. Live web intelligence retrieved.",
-            "source": "Direct Query Index"
-        })
+        return json.dumps({
+            "query": cleaned_query,
+            "count": 0,
+            "results": [],
+            "error": "SEARCH_UNAVAILABLE: no live search provider responded (Wikipedia/DuckDuckGo/Yahoo unreachable).",
+            "fallback_manual_url": f"https://duckduckgo.com/?q={urllib.parse.quote(cleaned_query)}",
+        }, indent=2)
 
     return json.dumps({
         "query": cleaned_query,

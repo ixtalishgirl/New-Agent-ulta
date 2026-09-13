@@ -5,5 +5,12 @@
     "insight": "Pure pitch black AMOLED with responsive Tailwind and clean buttons without code dumps in message",
     "creator": "Halye",
     "learned_at": "2026-09-05T18:49:46.233664Z"
+  },
+  {
+    "id": "pattern_2",
+    "topic": "self_update",
+    "insight": "Theme tokens are a safe self-edit surface; component code stays human-reviewed",
+    "creator": "Halye",
+    "learned_at": "2026-09-12T12:40:07.886473Z"
   }
 ]

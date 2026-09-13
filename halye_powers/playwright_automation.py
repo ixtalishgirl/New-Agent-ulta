@@ -5,6 +5,7 @@ Provides autonomous browser automation, DOM inspection, testing, touch simulatio
 and element interaction. Operates with Playwright Chromium when available,
 with automatic headless DOM touch fallback.
 """
+import os
 import sys
 import json
 import time
@@ -12,6 +13,32 @@ import asyncio
 import urllib.request
 import urllib.parse
 from html.parser import HTMLParser
+
+
+# Playwright keeps browser binaries in a HOME-dependent cache, and the dev server
+# may not share the shell's HOME. Pin the lookup to the first existing cache so
+# native Chromium is always found no matter which process spawns this script.
+def _ensure_browsers_path():
+    if os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
+        return
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.path.join(project_root, ".playwright-browsers"),
+        "/opt/ms-playwright",
+        os.path.join(os.path.expanduser("~"), ".cache", "ms-playwright"),
+        "/home/daytona/.cache/ms-playwright",
+        "/root/.cache/ms-playwright",
+    ]
+    for candidate in candidates:
+        try:
+            if os.path.isdir(candidate) and os.listdir(candidate):
+                os.environ["PLAYWRIGHT_BROWSERS_PATH"] = candidate
+                return
+        except OSError:
+            continue
+
+
+_ensure_browsers_path()
 
 class HeadlessTouchDOMParser(HTMLParser):
     def __init__(self, base_url=""):
@@ -193,8 +220,12 @@ async def run_automation(target_url_or_script: str, mode: str = "auto", target_e
     # Try importing playwright if installed
     try:
         from playwright.async_api import async_playwright
-    except (ImportError, ModuleNotFoundError):
-        return run_headless_touch_engine(target_url_or_script, mode, target_element)
+    except (ImportError, ModuleNotFoundError) as import_err:
+        fallback = run_headless_touch_engine(target_url_or_script, mode, target_element)
+        fallback["engine"] = "HeadlessDOMParser (fallback - Playwright not installed)"
+        fallback["native_engine_error"] = f"playwright import failed: {import_err}"
+        fallback["success"] = False
+        return fallback
 
     start = time.time()
     result = {
@@ -273,8 +304,12 @@ async def run_automation(target_url_or_script: str, mode: str = "auto", target_e
             return result
 
     except Exception as ex:
-        # Fall back to headless touch engine if Chromium fails
-        return run_headless_touch_engine(target_url_or_script, mode, target_element)
+        # Surface the real failure instead of silently pretending Chromium ran.
+        fallback = run_headless_touch_engine(target_url_or_script, mode, target_element)
+        fallback["engine"] = "HeadlessDOMParser (fallback - native Chromium failed)"
+        fallback["native_engine_error"] = f"{type(ex).__name__}: {ex}"
+        fallback["success"] = False
+        return fallback
 
 
 def main():

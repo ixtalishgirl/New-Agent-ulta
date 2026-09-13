@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Agent-owned theme tokens (self-update surface) - keep after the Tailwind import */
+@import "./halye-theme.css";
 
 @layer base {
   body {

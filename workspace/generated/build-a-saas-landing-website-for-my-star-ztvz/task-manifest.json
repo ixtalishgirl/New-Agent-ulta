@@ -1,0 +1,15 @@
+{
+  "goal": "build a saas landing website for my startup",
+  "kind": "website",
+  "title": "a saas landing website for my startup",
+  "createdBy": "Halye Long-Task Engine",
+  "createdAt": "2026-09-12T13:03:22.301Z",
+  "steps": [
+    "Analyse the goal and lock the deliverable",
+    "Scaffold the output directory and manifest",
+    "Author the page build",
+    "Validate the rendered markup",
+    "Repair automatically if validation fails",
+    "Write README and finalise artefacts"
+  ]
+}

@@ -185,6 +185,38 @@ export const NATIVE_TOOL_SCHEMAS = [
     },
   },
   {
+    name: 'self_update_ui',
+    description: 'Self-update: changes the agent\'s OWN running UI from a plain-language instruction (e.g. "mere message box ka colour blue karo", "accent colour #9333ea karo"). Safe and reversible: only theme tokens change, never component code.',
+    parameters: {
+      type: 'object',
+      properties: {
+        instruction: {
+          type: 'string',
+          description: 'Plain-language styling instruction naming a target (message box / agent message / accent / border) and a colour (name or #hex).',
+        },
+      },
+      required: ['instruction'],
+    },
+  },
+  {
+    name: 'web_search',
+    description: 'Searches the live internet in real-time for knowledge beyond model training: current library/API versions, docs, error messages, release notes, news, and facts. Returns real indexed results with title, url and snippet.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The search query, technical question, or topic to investigate.',
+        },
+        max_results: {
+          type: 'number',
+          description: 'Maximum number of results to return (default 5).',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'trigger_playwright_automation',
     description: 'Executes headless Playwright Chromium browser automation, live DOM testing, touch simulation, screenshot inspection, and synthetic web navigation.',
     parameters: {
@@ -374,6 +406,194 @@ export async function run_python_script(params: { script_path?: string; code?: s
     stderr: 'Either script_path or code must be provided',
     exitCode: 1,
     durationMs: 0,
+  };
+}
+
+/**
+ * 3.4 self_update_ui: The agent restyles its own running UI from a plain-language
+ * instruction. Delegates to the self-update engine, which validates values, backs the
+ * theme file up, verifies the write, and can be rolled back.
+ */
+export async function self_update_ui(params: {
+  instruction: string;
+}): Promise<ToolExecutionResult> {
+  const startTime = Date.now();
+  const instruction = (params?.instruction || '').trim();
+
+  if (!instruction) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: 'self_update_ui requires an instruction',
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+
+  try {
+    const { interpretThemeInstruction, writeTheme, readTheme } = await import('./selfUpdateEngine');
+    const interpreted = interpretThemeInstruction(instruction);
+
+    if (interpreted.length === 0) {
+      return {
+        success: false,
+        stdout: JSON.stringify({
+          instruction,
+          understood: false,
+          editable_tokens: ['--halye-bubble-user', '--halye-bubble-user-border', '--halye-bubble-agent', '--halye-accent'],
+        }),
+        stderr:
+          'Target (message box / agent message / accent) aur colour (naam ya #hex) dono chahiye. Example: "mere message box ka colour blue karo".',
+        exitCode: 1,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    const result = writeTheme(interpreted.map((i) => ({ token: i.token, value: i.value })));
+
+    return {
+      success: result.ok,
+      stdout: JSON.stringify(
+        {
+          instruction,
+          understood: true,
+          applied: result.applied,
+          reasons: interpreted.map((i) => i.reason),
+          verified: result.verified,
+          theme: readTheme(),
+          rollback: 'POST /api/self/theme/rollback',
+        },
+        null,
+        2,
+      ),
+      stderr: result.ok ? '' : result.error || 'Self-update failed',
+      exitCode: result.ok ? 0 : 1,
+      durationMs: Date.now() - startTime,
+      data: result,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: `Self-update error: ${err.message}`,
+      exitCode: 1,
+      durationMs: Date.now() - startTime,
+    };
+  }
+}
+
+/**
+ * 3.5 web_search: Real-time external search so the agent can learn things that are
+ * not in its training data (current versions, docs, errors, news).
+ * Uses the live DuckDuckGo HTML index and never fabricates results.
+ */
+export async function web_search(params: {
+  query: string;
+  max_results?: number;
+}): Promise<ToolExecutionResult> {
+  const query = (params.query || '').trim();
+  const maxResults = Math.min(Math.max(params.max_results || 5, 1), 10);
+  const startTime = Date.now();
+
+  if (!query) {
+    return {
+      success: false,
+      stdout: JSON.stringify({ query, count: 0, results: [], error: 'EMPTY_QUERY' }),
+      stderr: 'web_search requires a non-empty query',
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+
+  const results: Array<{ title: string; url: string; snippet: string; source: string }> = [];
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const html = await res.text();
+
+    const decode = (s: string) =>
+      s
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&#x27;|&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+
+    for (const block of html.split('result__body').slice(1)) {
+      const anchor = block.match(/<a\b([^>]*result__a[^>]*)>([\s\S]*?)<\/a>/i);
+      if (!anchor) continue;
+      const hrefMatch = anchor[1].match(/href="([^"]+)"/i);
+      if (!hrefMatch) continue;
+
+      let href = hrefMatch[1];
+      if (href.startsWith('//')) href = 'https:' + href;
+      else if (href.startsWith('/')) href = 'https://duckduckgo.com' + href;
+      if (href.includes('uddg=')) {
+        try {
+          const target = new URL(href).searchParams.get('uddg');
+          if (target) href = target;
+        } catch {}
+      }
+
+      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i);
+      const title = decode(anchor[2]);
+      if (!title || !href.startsWith('http')) continue;
+
+      results.push({
+        title,
+        url: href,
+        snippet: snippetMatch ? decode(snippetMatch[1]) : '',
+        source: 'DuckDuckGo HTML Index',
+      });
+      if (results.length >= maxResults) break;
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      stdout: JSON.stringify({ query, count: 0, results: [], error: `SEARCH_FAILED: ${err.message}` }),
+      stderr: `Live search request failed: ${err.message}`,
+      exitCode: 1,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  if (results.length === 0) {
+    // Honest failure - never invent a result the model could mistake for real data
+    return {
+      success: false,
+      stdout: JSON.stringify({
+        query,
+        count: 0,
+        results: [],
+        error: 'NO_RESULTS',
+        manual_url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+      }),
+      stderr: `No live results parsed for "${query}"`,
+      exitCode: 1,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  return {
+    success: true,
+    stdout: JSON.stringify({ query, count: results.length, results }, null, 2),
+    stderr: '',
+    exitCode: 0,
+    durationMs: Date.now() - startTime,
+    data: { query, count: results.length, results },
   };
 }
 
@@ -598,6 +818,8 @@ export type SquadToolType =
   | 'execute_bash_command'
   | 'run_pip_installer'
   | 'run_python_script'
+  | 'web_search'
+  | 'self_update_ui'
   | 'trigger_playwright_automation'
   | 'create_and_register_custom_tool'
   | 'self_modify_tool'
@@ -694,6 +916,10 @@ export async function executeToolWithSelfCorrection(
       lastResult = await run_pip_installer(currentArgs.package_name);
     } else if (tool === 'run_python_script') {
       lastResult = await run_python_script(currentArgs);
+    } else if (tool === 'web_search') {
+      lastResult = await web_search(currentArgs as any);
+    } else if (tool === 'self_update_ui') {
+      lastResult = await self_update_ui(currentArgs as any);
     } else if (tool === 'trigger_playwright_automation') {
       const targetUrl = currentArgs.url_or_script || currentArgs.url || currentArgs.code || currentArgs.target || 'http://127.0.0.1:3000';
       lastResult = await trigger_playwright_automation(targetUrl, currentArgs.mode || 'auto', currentArgs.target_element || currentArgs.element || '');
@@ -799,6 +1025,39 @@ export function analyzeUserIntentForSquad(prompt: string): {
         mode: isTouch ? 'touch' : 'auto',
       },
     });
+  }
+
+  // 1.5 Real-time external web search (knowledge that is NOT in the model's training data)
+  const searchTriggers = [
+    'search', 'google', 'web search', 'internet', 'latest', 'newest', 'current',
+    'today', 'news', 'trending', 'release notes', 'version of', 'look up',
+    'find online', 'documentation for', 'docs for', 'kya hai', 'kya he',
+    'dhoondo', 'dhundo', 'talash', 'research karo',
+  ];
+  if (searchTriggers.some((k) => lower.includes(k)) && !needsPlaywright) {
+    needsTools = true;
+    const cleanedQuery = prompt
+      .replace(/^(please\s+)?(search|google|web search|dhundo|dhoondo|find)\s*(for|about|karo|kar)?\s*/i, '')
+      .replace(/^(latest|newest|current)\s+(news|info|information)\s+(about|on|for)\s*/i, '')
+      .trim();
+    actions.push({
+      tool: 'web_search',
+      args: {
+        query: (cleanedQuery.length > 2 ? cleanedQuery : prompt).slice(0, 300),
+        max_results: 5,
+      },
+    });
+  }
+
+  // 1.6 Self-update of the agent's own UI (styling instructions)
+  const selfUpdateTriggers = [
+    'colour change', 'color change', 'rang change', 'rang badlo', 'colour badlo',
+    'color badlo', 'message box', 'chat bubble', 'accent colour', 'accent color',
+    'theme change', 'theme badlo', 'apna ui', 'apni ui', 'khud ka colour',
+  ];
+  if (selfUpdateTriggers.some((k) => lower.includes(k))) {
+    needsTools = true;
+    actions.push({ tool: 'self_update_ui', args: { instruction: prompt } });
   }
 
   // 2. Self-Modification & Autonomous Tool Building
