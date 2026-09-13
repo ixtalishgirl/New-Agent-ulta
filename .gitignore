@@ -3,6 +3,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Playwright browser cache (installed on demand by halyePythonEnv.ts)
+.playwright-browsers/
+
 # Secrets and local state — never commit these
 .env
 .env.local

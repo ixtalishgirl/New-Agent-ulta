@@ -6,6 +6,17 @@ import vm from 'vm';
 import { exec, spawn, execFile } from 'child_process';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
+import { ensurePythonToolchain, getPythonEnvStatus } from './halyePythonEnv';
+import { auditCodebase } from './halyeCodebaseAudit';
+import {
+  planBeforeModelCall,
+  producePlan,
+  renderPlan,
+  getPlannerStatus,
+  getLastPlan,
+  clearPlanCache,
+  assessPlanningNeed,
+} from './halyeCognitivePlanner';
 import { BLANK_CANVAS_CODE, DEFAULT_SAAS_WEBSITE_CODE } from './src/templates';
 import {
   SQUAD_MEMBERS,
@@ -58,6 +69,37 @@ if (!process.env.PATH?.includes('/usr/local/bin')) {
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// ---------------------------------------------------------------------------
+// Python tool-runtime bootstrap
+// The platform install step is Node-only, so LangChain / Playwright / bs4 are not
+// present in a fresh sandbox and every Python-backed tool silently fails. Kick the
+// installer off in the background (never awaited: boot must stay fast) and expose
+// the live state so the UI and the agent can see whether their tools are usable.
+// ---------------------------------------------------------------------------
+void ensurePythonToolchain();
+
+app.get('/api/python/env', (_req, res) => {
+  res.json({ success: true, ...getPythonEnvStatus() });
+});
+
+// ---------------------------------------------------------------------------
+// Real codebase self-audit.
+// Registered here so it takes precedence over the legacy read-and-diagnose handler
+// further down this file (Express dispatches to the first matching route). The legacy
+// handler returned hardcoded "issues diagnosed" / "fixes applied" text, which made the
+// agent's self-awareness look deeper than it was. This one reports only findings it
+// derived from real file contents and never claims a fix it did not make.
+// ---------------------------------------------------------------------------
+app.post('/api/codebase/read-and-diagnose', async (req, res) => {
+  try {
+    const { paths, codeContent } = req.body || {};
+    const result = await auditCodebase({ paths, codeContent });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Audit failed' });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Nemotron key intake + key persistence
@@ -416,6 +458,11 @@ export interface RealAICallParams {
   temperature?: number;
   providerOverride?: 'nvidia' | 'gemini' | 'groq' | 'openrouter';
   conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  /**
+   * Internal call (the cognitive planner planning itself). Planning is skipped for these
+   * so the plan-first step can never recurse into another plan-first step.
+   */
+  internal?: boolean;
 }
 
 export interface RealAICallResult {
@@ -889,7 +936,11 @@ export async function executeLocalNemotronCognitiveFallback(
   prompt: string,
   targetModel: string = 'nvidia/nemotron-3-super-120b-a12b',
   systemInstruction?: string,
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>,
+  // Why real inference did not run. Threaded through by the callers so the user is
+  // never told "no API key configured" when the real cause was a provider timeout
+  // or an HTTP error - that message sent users chasing a key they already had.
+  reason?: string
 ): Promise<RealAICallResult> {
   const inner = await executeLocalNemotronCognitiveFallbackInner(
     prompt,
@@ -901,15 +952,30 @@ export async function executeLocalNemotronCognitiveFallback(
   return {
     ...inner,
     provider: 'offline-template',
-    modelName: 'offline-template-engine (no API key configured)',
+    modelName: 'offline-template-engine (real inference unavailable)',
     text:
-      `⚠️ **OFFLINE TEMPLATE MODE** — is sandbox me koi model API key configured nahi hai, ` +
-      `is liye real AI inference nahi chala. Neeche ka jawab local template engine se hai.\n` +
-      `Real brain (model reasoning + autonomous tool planning) chalu karne ke liye **API Keys** ` +
-      `button se apni key save karein (NVIDIA NIM / Google Gemini / Groq / OpenRouter).\n\n` +
+      `⚠️ **Yeh model ka jawab NAHI hai — real inference nahi chala, neeche local template engine ka output hai.**\n` +
+      `\n**Wajah:** ${reason || 'provider se koi valid response nahi mila.'}\n` +
+      `\nAgar key missing hai to **API Keys** button se apni key save karein (NVIDIA NIM / Google Gemini / Groq / OpenRouter). ` +
+      `Agar key pehle se lagi hui hai to provider ne timeout ya error diya hai — thori dair baad dobara try karein.\n\n` +
       inner.text,
   };
 }
+
+/**
+ * Decoding policy for every model call in the app.
+ *
+ * temperature 0.01 + top_p 0.1 keep the assistant deterministic, on-topic and
+ * logic-first: it answers what was asked instead of free-associating or padding.
+ * These are the ONLY randomness knobs - every provider branch below reads them, and
+ * the per-call `temperature` values individual routes pass in are ignored so the
+ * squad route (0.3/0.4) and the vision route (0.2) cannot drift away from this.
+ *
+ * Note: a very low top_p makes long free-form writing slightly stiff/repetitive.
+ * If replies ever look robotic, raise HALYE_TOP_P first - not the temperature.
+ */
+export const HALYE_TEMPERATURE = 0.01;
+export const HALYE_TOP_P = 0.1;
 
 /**
  * Universal Real AI Model Invocation:
@@ -918,12 +984,36 @@ export async function executeLocalNemotronCognitiveFallback(
  */
 export async function callRealAIModel(params: RealAICallParams): Promise<RealAICallResult> {
   const { prompt, imageBase64, maxTokens = 4096, conversationHistory } = params;
+  // ---------------------------------------------------------------------------
+  // THINK FIRST, THEN ACT
+  // A short planning call runs against the same configured provider before the
+  // answering call, and its plan is handed to the model as an explicit scratchpad.
+  // The model therefore works from numbered steps instead of improvising as it
+  // writes. Skipped for internal calls (the planner's own call) and for trivial
+  // prompts, and repeated prompts are served from cache so this stays fast.
+  // If the planner call fails, its reason is recorded and NO fake steps are added.
+  // ---------------------------------------------------------------------------
+  let planBlock: string | null = null;
+  try {
+    planBlock = await planBeforeModelCall(
+      { prompt, internal: params.internal },
+      (planParams) => callRealAIModel({ ...planParams, internal: true }),
+    );
+  } catch (err: any) {
+    console.warn('[Halye Planner] plan-first step skipped:', err?.message || err);
+    planBlock = null;
+  }
   // Every provider branch below uses this local `systemInstruction`, so composing the
   // persona here applies the app's voice contract to Gemini, NVIDIA, Groq and OpenRouter
   // in one place - the caller's task-specific instruction still comes last.
-  const systemInstruction = composeSystemInstruction(params.systemInstruction);
+  const instructionWithPlan = planBlock
+    ? `${planBlock}\n\n${params.systemInstruction || ''}`.trim()
+    : params.systemInstruction;
+  const systemInstruction = composeSystemInstruction(instructionWithPlan);
   let targetModel = params.model || 'nvidia/nemotron-3-super-120b-a12b';
-  let temperature = params.temperature ?? (targetModel.includes('nemotron') ? 0.01 : 0.2);
+  // Deliberately ignores params.temperature - see HALYE_TEMPERATURE above.
+  const temperature = HALYE_TEMPERATURE;
+  const topP = HALYE_TOP_P;
 
   // Resolve models with default lock to nvidia/nemotron-3-super-120b-a12b
   const aliasMap: Record<string, string> = {
@@ -989,6 +1079,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
     const contents = buildGeminiContents(prompt, conversationHistory, imageBase64);
     const config: any = {
       temperature,
+      topP,
       maxOutputTokens: maxTokens,
     };
     if (systemInstruction) {
@@ -1011,7 +1102,10 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
   // 2. NVIDIA NIM API Call (build.nvidia.com)
   if (provider === 'nvidia') {
     if (!nvidiaKey) {
-      return await executeLocalNemotronCognitiveFallback(prompt, targetModel, systemInstruction, conversationHistory);
+      return await executeLocalNemotronCognitiveFallback(
+        prompt, targetModel, systemInstruction, conversationHistory,
+        'NVIDIA NIM ke liye koi API key save nahi hai.',
+      );
     }
     const isNemotron = targetModel.includes('nemotron');
     // Tone reminder kept next to the provider call. The old text here demanded unconditional
@@ -1022,21 +1116,37 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
 
     const messages = buildOpenAIMessages(prompt, effectiveSystem, conversationHistory, imageBase64);
 
-    let resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${nvidiaKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages,
-        max_tokens: Math.min(maxTokens, 4096),
-        temperature: isNemotron ? 0.01 : temperature,
-        top_p: isNemotron ? 1.0 : 0.95,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
+    // A 120B model plus the full persona contract routinely needs more than 45s on a
+    // cold start, and a timeout used to escape this branch entirely: the caller then
+    // reported the misleading "no API key configured" message. Catch it here instead
+    // so the real reason reaches the user, and allow more headroom per attempt.
+    let resp: Response;
+    try {
+      resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${nvidiaKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages,
+          max_tokens: Math.min(maxTokens, 4096),
+          temperature,
+          top_p: topP,
+        }),
+        signal: AbortSignal.timeout(75000),
+      });
+    } catch (fetchErr: any) {
+      const reason =
+        fetchErr?.name === 'TimeoutError'
+          ? 'NVIDIA NIM ne 75s ke andar jawab nahi diya (timeout) - provider slow ya busy hai.'
+          : `NVIDIA NIM se connect nahi ho saka (${fetchErr?.message || fetchErr}).`;
+      console.warn(`[NVIDIA NIM] ${reason}`);
+      return await executeLocalNemotronCognitiveFallback(
+        prompt, targetModel, systemInstruction, conversationHistory, reason,
+      );
+    }
 
     // If 404, retry with short model name if prefixed
     if (!resp.ok && targetModel.includes('/')) {
@@ -1053,6 +1163,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
             messages,
             max_tokens: Math.min(maxTokens, 4096),
             temperature,
+            top_p: topP,
           }),
           signal: AbortSignal.timeout(35000),
         });
@@ -1069,7 +1180,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
         try {
           console.warn(`[NVIDIA NIM Fallback] ${errBody.slice(0, 100)}. Falling back to Gemini...`);
           const contents = buildGeminiContents(prompt, conversationHistory, imageBase64);
-          const config: any = { temperature, maxOutputTokens: maxTokens };
+          const config: any = { temperature, topP, maxOutputTokens: maxTokens };
           if (systemInstruction) config.systemInstruction = { parts: [{ text: systemInstruction }] };
           const gRes = await callGeminiWithFallback(gemini, 'gemini-3.8-flash', contents, config);
           return {
@@ -1082,7 +1193,10 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
         }
       }
       console.warn(`[NVIDIA NIM Error ${resp.status}]. Activating Sovereign Nemotron 120B Local Engine...`);
-      return await executeLocalNemotronCognitiveFallback(prompt, targetModel, systemInstruction, conversationHistory);
+      return await executeLocalNemotronCognitiveFallback(
+        prompt, targetModel, systemInstruction, conversationHistory,
+        `NVIDIA NIM (${targetModel}) ne HTTP ${resp.status} return kiya. Key valid ho sakti hai - yeh provider-side error hai.`,
+      );
     }
 
     const data = (await resp.json()) as any;
@@ -1120,6 +1234,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
         messages,
         max_tokens: Math.min(maxTokens, 4096),
         temperature,
+        top_p: topP,
       }),
       signal: AbortSignal.timeout(35000),
     });
@@ -1159,6 +1274,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
         messages,
         max_tokens: Math.min(maxTokens, 4096),
         temperature,
+        top_p: topP,
       }),
       signal: AbortSignal.timeout(45000),
     });

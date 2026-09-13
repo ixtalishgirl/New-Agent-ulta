@@ -324,7 +324,10 @@ export async function execute_bash_command(cmd: string, timeoutMs = 30000): Prom
       const durationMs = Date.now() - start;
       const stdoutStr = stdout ? stdout.toString() : '';
       const stderrStr = stderr ? stderr.toString() : (error ? error.message : '');
-      const exitCode = error && error.code !== undefined ? error.code : (stderrStr && !stdoutStr ? 1 : 0);
+      // `error` is only set when the command truly failed (non-zero exit, signal or
+      // timeout), so trust it. The previous heuristic (`stderr && !stdout -> 1`)
+      // marked successful commands that merely logged warnings as failures.
+      const exitCode = error ? (typeof error.code === 'number' ? error.code : 1) : 0;
       resolve({
         success: exitCode === 0,
         stdout: stdoutStr,
@@ -340,22 +343,48 @@ export async function execute_bash_command(cmd: string, timeoutMs = 30000): Prom
  * 2. run_pip_installer: Python libraries install karne ke liye
  */
 export async function run_pip_installer(packageName: string): Promise<ToolExecutionResult> {
-  const cleanPkg = packageName.trim().replace(/['";&$|]/g, '');
-  const cmd = `python3 -m pip install --break-system-packages ${cleanPkg} || pip3 install ${cleanPkg}`;
-  const res = await execute_bash_command(cmd, 60000);
-  
-  // Verify package installation
-  const verifyRes = await execute_bash_command(`python3 -c "import ${cleanPkg.split(/[>=<]/)[0]}; print('Package verified')"`).catch(() => null);
-  const isVerified = verifyRes && verifyRes.stdout.includes('Package verified');
+  const cleanPkg = (packageName || '').trim().replace(/['"`;&$|\n\r]/g, '');
+  if (!cleanPkg) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: 'run_pip_installer requires a package name',
+      exitCode: 1,
+      durationMs: 0,
+    };
+  }
+
+  // pip < 23 rejects `--break-system-packages` outright while PEP 668 environments
+  // reject the flagless form, so try plain first and only add flags on the matching
+  // error instead of hardcoding a flag that breaks one of the two.
+  const installArgs = `-m pip install --disable-pip-version-check ${cleanPkg}`;
+  let res = await execute_bash_command(`python3 ${installArgs}`, 180000);
+
+  if (!res.success && /externally-managed-environment|externally managed/i.test(res.stderr)) {
+    res = await execute_bash_command(`python3 ${installArgs} --break-system-packages`, 180000);
+  }
+  if (!res.success && /permission denied|not writable|EACCES/i.test(res.stderr)) {
+    res = await execute_bash_command(`python3 ${installArgs} --user`, 180000);
+  }
+
+  // Verify through distribution metadata because the pip name and the import name
+  // differ for real packages (beautifulsoup4 -> bs4, PyYAML -> yaml). Importing the
+  // raw pip name marked those installs unverified even when they had succeeded.
+  const distribution = cleanPkg.split(/[<>=!~\[]/)[0].trim();
+  const verifyCmd =
+    `python3 -c "import importlib.metadata as m; m.version('${distribution}'); print('Package verified')"` +
+    ` || python3 -c "import ${distribution.replace(/-/g, '_')}; print('Package verified')"`;
+  const verifyRes = await execute_bash_command(verifyCmd, 30000);
+  const isVerified = verifyRes.success && verifyRes.stdout.includes('Package verified');
 
   return {
-    success: res.success || Boolean(isVerified),
-    stdout: res.stdout || (isVerified ? `Successfully verified ${cleanPkg} is installed.` : ''),
+    success: res.success || isVerified,
+    stdout: res.stdout || (isVerified ? `Successfully verified ${distribution} is installed.` : ''),
     stderr: isVerified ? '' : res.stderr,
     exitCode: isVerified ? 0 : res.exitCode,
     durationMs: res.durationMs,
     data: {
-      package: cleanPkg,
+      package: distribution,
       verified: isVerified,
     },
   };
@@ -665,20 +694,24 @@ export async function create_and_register_custom_tool(params: {
     fs.mkdirSync(toolsDir, { recursive: true });
   }
   const filePath = path.join(toolsDir, `${safeName}.${ext}`);
+  // Validate in a scratch file before touching the real path, so a rejected build
+  // never leaves a broken script on disk nor clobbers a previously working tool of
+  // the same name (re-creating a tool replaces the old one by design).
+  const stagingPath = `${filePath}.staging-${Date.now()}`;
   
   try {
-    fs.writeFileSync(filePath, code, 'utf-8');
-    fs.chmodSync(filePath, 0o755);
+    fs.writeFileSync(stagingPath, code, 'utf-8');
     
     // Quick syntax validation test
     let testRes: ToolExecutionResult;
     if (language === 'bash') {
-      testRes = await execute_bash_command(`bash -n "${filePath}"`);
+      testRes = await execute_bash_command(`bash -n "${stagingPath}"`);
     } else {
-      testRes = await execute_bash_command(`python3 -m py_compile "${filePath}"`);
+      testRes = await execute_bash_command(`python3 -m py_compile "${stagingPath}"`);
     }
     
     if (!testRes.success) {
+      try { fs.unlinkSync(stagingPath); } catch {}
       return {
         success: false,
         stdout: '',
@@ -687,6 +720,10 @@ export async function create_and_register_custom_tool(params: {
         durationMs: testRes.durationMs,
       };
     }
+
+    // Promote the validated build into place.
+    fs.renameSync(stagingPath, filePath);
+    fs.chmodSync(filePath, 0o755);
     
     REGISTERED_CUSTOM_TOOLS.set(safeName, {
       name: safeName,
@@ -731,16 +768,20 @@ export async function self_modify_tool(params: {
   const shPath = path.join(toolsDir, `${safeName}.sh`);
   const targetPath = fs.existsSync(pyPath) ? pyPath : (fs.existsSync(shPath) ? shPath : pyPath);
   
+  // Same staging rule as tool creation: a self-modification that fails syntax
+  // validation must never overwrite the working version of the tool.
+  const selfModifyStagingPath = `${targetPath}.staging-${Date.now()}`;
+
   try {
-    fs.writeFileSync(targetPath, new_code, 'utf-8');
-    fs.chmodSync(targetPath, 0o755);
+    fs.writeFileSync(selfModifyStagingPath, new_code, 'utf-8');
     
     const isPython = targetPath.endsWith('.py');
     const testRes = isPython
-      ? await execute_bash_command(`python3 -m py_compile "${targetPath}"`)
-      : await execute_bash_command(`bash -n "${targetPath}"`);
+      ? await execute_bash_command(`python3 -m py_compile "${selfModifyStagingPath}"`)
+      : await execute_bash_command(`bash -n "${selfModifyStagingPath}"`);
       
     if (!testRes.success) {
+      try { fs.unlinkSync(selfModifyStagingPath); } catch {}
       return {
         success: false,
         stdout: '',
@@ -749,6 +790,10 @@ export async function self_modify_tool(params: {
         durationMs: testRes.durationMs,
       };
     }
+
+    // Promote the validated build into place (POSIX rename replaces atomically).
+    fs.renameSync(selfModifyStagingPath, targetPath);
+    fs.chmodSync(targetPath, 0o755);
     
     const existing = REGISTERED_CUSTOM_TOOLS.get(safeName);
     REGISTERED_CUSTOM_TOOLS.set(safeName, {

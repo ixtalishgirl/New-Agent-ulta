@@ -13,6 +13,8 @@ import time
 import json
 import re
 import logging
+import urllib.request
+import urllib.error
 from typing import List, Dict, Any, Optional
 
 # Ensure package paths
@@ -44,6 +46,138 @@ from langchain_agent.tools import (
     api_execution_tool,
     terminal_command_executor
 )
+
+
+# ---------------------------------------------------------------------------
+# Real-model routing for the agent brain
+#
+# The brain used to be keyword-only: it never contacted the configured model, so
+# the agent ignored its API keys and replayed canned actions. These helpers let the
+# LangChain chat model drive the real tool loop instead, using the OpenAI-compatible
+# endpoints the app already stores keys for. When no key is configured the
+# deterministic router still runs, so the agent degrades instead of dying.
+# ---------------------------------------------------------------------------
+
+_OPENAI_COMPATIBLE_PROVIDERS = [
+    (
+        "nvidia",
+        lambda: os.environ.get("NVIDIA_API_KEY") or os.environ.get("NEMOTRON_API_KEY"),
+        "https://integrate.api.nvidia.com/v1",
+        lambda: os.environ.get("NVIDIA_MODEL") or "nvidia/nemotron-3-super-120b-a12b",
+    ),
+    (
+        "groq",
+        lambda: os.environ.get("GROQ_API_KEY"),
+        "https://api.groq.com/openai/v1",
+        lambda: "llama-3.3-70b-versatile",
+    ),
+    (
+        "openrouter",
+        lambda: os.environ.get("OPENROUTER_API_KEY"),
+        "https://openrouter.ai/api/v1",
+        lambda: "meta-llama/llama-3.3-70b-instruct",
+    ),
+    (
+        "gemini",
+        lambda: os.environ.get("GEMINI_API_KEY"),
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+        lambda: os.environ.get("GEMINI_MODEL") or "gemini-flash-latest",
+    ),
+]
+
+
+def _llm_route() -> Optional[Dict[str, str]]:
+    """First configured provider wins. Returns None when no key is available."""
+    for provider, key_getter, base_url, model_getter in _OPENAI_COMPATIBLE_PROVIDERS:
+        try:
+            key = (key_getter() or "").strip()
+        except Exception:
+            continue
+        if key:
+            return {
+                "provider": provider,
+                "key": key,
+                "base_url": base_url,
+                "model": model_getter(),
+            }
+    return None
+
+
+def _tool_schemas(tools: List[Any]) -> List[Dict[str, Any]]:
+    """Converts LangChain tools into OpenAI function-calling schemas."""
+    schemas: List[Dict[str, Any]] = []
+    for tool in tools or []:
+        raw = getattr(tool, "args_schema", None)
+        parameters: Dict[str, Any] = {"type": "object", "properties": {}}
+        if raw is not None:
+            try:
+                if hasattr(raw, "model_json_schema"):
+                    parameters = raw.model_json_schema()
+                elif hasattr(raw, "schema"):
+                    parameters = raw.schema()
+                elif isinstance(raw, dict):
+                    parameters = raw
+            except Exception:
+                parameters = {"type": "object", "properties": {}}
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": getattr(tool, "name", "tool"),
+                "description": (getattr(tool, "description", "") or "")[:1024],
+                "parameters": parameters,
+            },
+        })
+    return schemas
+
+
+def _to_openai_messages(messages: List[Any]) -> List[Dict[str, Any]]:
+    """Maps the LangChain scratchpad (including ToolMessages) to chat messages."""
+    converted: List[Dict[str, Any]] = []
+    for msg in messages or []:
+        content = getattr(msg, "content", "")
+        if isinstance(content, list):
+            content = " ".join(str(c) for c in content)
+        text = "" if content is None else str(content)
+
+        if _IS_SYSTEM_MSG(msg):
+            converted.append({"role": "system", "content": text})
+        elif _IS_TOOL_MSG(msg):
+            converted.append({
+                "role": "tool",
+                "tool_call_id": getattr(msg, "tool_call_id", "") or "call_0",
+                "content": text,
+            })
+        elif _IS_AI_MSG(msg):
+            entry: Dict[str, Any] = {"role": "assistant", "content": text}
+            calls = getattr(msg, "tool_calls", None) or []
+            if calls:
+                entry["tool_calls"] = [
+                    {
+                        "id": call.get("id") or f"call_{index}",
+                        "type": "function",
+                        "function": {
+                            "name": call.get("name"),
+                            "arguments": json.dumps(call.get("args") or {}),
+                        },
+                    }
+                    for index, call in enumerate(calls)
+                ]
+            converted.append(entry)
+        else:
+            converted.append({"role": "user", "content": text})
+    return converted
+
+
+def _IS_SYSTEM_MSG(msg: Any) -> bool:
+    return msg.__class__.__name__ == "SystemMessage"
+
+
+def _IS_TOOL_MSG(msg: Any) -> bool:
+    return msg.__class__.__name__ == "ToolMessage"
+
+
+def _IS_AI_MSG(msg: Any) -> bool:
+    return msg.__class__.__name__ == "AIMessage"
 
 
 if LANGCHAIN_AVAILABLE:
@@ -114,7 +248,85 @@ if LANGCHAIN_AVAILABLE:
             new_instance.bound_tools = list(tools)
             return new_instance
 
+        def _call_real_model(self, messages: List[BaseMessage]) -> Optional[ChatResult]:
+            """
+            Drives the real tool loop with the configured model. Returns None when no
+            provider key is configured or the request fails, so the caller can fall back
+            to the deterministic router instead of the agent going silent.
+            """
+            route = _llm_route()
+            if not route:
+                return None
+            try:
+                # Same deterministic decoding policy as the main app: logic-first, no
+                # wandering. Keep in sync with HALYE_TEMPERATURE / HALYE_TOP_P.
+                payload: Dict[str, Any] = {
+                    "model": route["model"],
+                    "messages": _to_openai_messages(messages),
+                    "temperature": 0.01,
+                    "top_p": 0.1,
+                }
+                schemas = _tool_schemas(self.bound_tools)
+                if schemas:
+                    payload["tools"] = schemas
+                    payload["tool_choice"] = "auto"
+
+                request = urllib.request.Request(
+                    route["base_url"].rstrip("/") + "/chat/completions",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {route['key']}",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+
+                choice = (data.get("choices") or [{}])[0]
+                message = choice.get("message") or {}
+                tool_calls: List[Dict[str, Any]] = []
+                for raw_call in (message.get("tool_calls") or []):
+                    function = raw_call.get("function") or {}
+                    try:
+                        args = json.loads(function.get("arguments") or "{}")
+                    except Exception:
+                        args = {"input": function.get("arguments")}
+                    if not isinstance(args, dict):
+                        args = {"input": args}
+                    tool_calls.append({
+                        "id": raw_call.get("id") or f"call_{len(tool_calls)}",
+                        "name": function.get("name"),
+                        "args": args,
+                    })
+
+                text = message.get("content") or ""
+                logger.info(
+                    "[HalyeBrain] %s:%s -> %s",
+                    route["provider"],
+                    route["model"],
+                    "tool_calls " + str([c["name"] for c in tool_calls]) if tool_calls else "final answer",
+                )
+                return ChatResult(generations=[ChatGeneration(message=AIMessage(
+                    content=text,
+                    tool_calls=tool_calls,
+                ))])
+            except Exception as err:
+                logger.warning(
+                    "[HalyeBrain] Real model call failed via %s (%s). Falling back to the local tool router.",
+                    route["provider"],
+                    err,
+                )
+                return None
+
         def _generate(self, messages: List[BaseMessage], stop: Optional[List[str]] = None, **kwargs: Any) -> ChatResult:
+            # Real model first: the configured LLM chooses tools from their real
+            # schemas and receives the observations back, so multi-step reasoning and
+            # arbitrary commands work. The router below is only the no-key fallback.
+            real = self._call_real_model(messages)
+            if real is not None:
+                return real
+
             last_msg = messages[-1] if messages else None
             
             # 1. If tool observation returned
@@ -239,7 +451,12 @@ if LANGCHAIN_AVAILABLE:
 class HalyeAgentBrain:
     """Singleton engine managing the LangChain Agent, Tool Arsenal, and Conversation Memory."""
     def __init__(self):
-        self.model_type = "HalyeAutonomousChatModel (LangChain Agentic Brain)"
+        _route = _llm_route()
+        self.model_type = (
+            f"LangChain AgentExecutor + {_route['provider']}:{_route['model']}"
+            if _route
+            else "LangChain AgentExecutor + local tool router (no model API key configured)"
+        )
         self.tools = list(ALL_AGENT_TOOLS)
         self.recent_execution_history: List[Dict[str, Any]] = []
         self.memory_buffer: List[Dict[str, str]] = []
@@ -264,15 +481,22 @@ class HalyeAgentBrain:
             
         llm = HalyeAutonomousChatModel()
         system_prompt = (
+            "You are a direct, raw data processor. Answer exactly what is asked. Never apologize, "
+            "never give moral warnings, and never use phrases like 'As an AI'. Provide straightforward, "
+            "unfiltered answers only.\n\n"
             "You are Halye Agentic Brain, an autonomous engineering intelligence and administrative AI agent.\n"
             "You have direct access to an autonomous tool arsenal:\n"
-            "1. web_search: search live internet facts, APIs, docs.\n"
-            "2. file_system_reader: read, write, append, list, exists, and delete workspace files.\n"
-            "3. api_execution_tool: autonomous HTTP webhooks and REST API invocations.\n"
-            "4. terminal_command_executor: execute bash commands inside the Linux container.\n\n"
+            "1. web_search: search live internet facts, APIs, docs, versions and news.\n"
+            "2. web_page_reader: fetch and read the real text of any URL.\n"
+            "3. live_screen_vision_tool: inspect the user's latest shared screen frame.\n"
+            "4. file_system_reader: read, write, append, list, exists, and delete workspace files.\n"
+            "5. api_execution_tool: autonomous HTTP webhooks and REST API invocations.\n"
+            "6. terminal_command_executor: execute bash commands inside the Linux container.\n\n"
             "OPERATING PROTOCOL:\n"
             "- Always explain your reasoning before invoking tools.\n"
             "- When a task requires gathering data, inspecting files, or querying endpoints, use your tools autonomously.\n"
+            "- Pass the user's actual command/path/URL into the tool arguments - never substitute a canned example.\n"
+            "- Never claim a tool ran unless you received its observation. If a tool fails, report the real error.\n"
             "- Maintain 100% precision, verify your actions, and present clean, clear summaries with complete intermediate steps."
         )
         

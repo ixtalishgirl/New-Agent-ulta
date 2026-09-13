@@ -406,17 +406,15 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       const res = await fetch('/api/codebase/read-and-diagnose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          codeContent: code,
-          paths: ['src/components/HalyeStudio.tsx', 'server.ts', 'src/App.tsx', 'src/types.ts'],
-        }),
+        // No hardcoded `paths`: the server discovers the real source tree itself.
+        body: JSON.stringify({ codeContent: code }),
       });
       const data = await res.json();
       if (data.success) {
         const auditMessage: ChatMessage = {
           id: 'ast-audit-' + Date.now(),
           role: 'assistant',
-          text: `**Codebase Audit Complete (${data.totalLines.toLocaleString()} Lines Analyzed)**:\n\nHalye Agent ny total **${data.totalLines.toLocaleString()}** lines of code inspect ki hain across ${data.filesAudited.length} files. Zero fatal runtime issues detect huay.\n\n• **Jo Mila (Issues Discovered)**: ${data.issuesDiagnosed?.map((i: any) => i.title).join(', ')}\n• **Jo Kiya (Fixes & Patches)**: ${data.fixesApplied?.map((f: any) => f.title).join(', ')}\n\nNiche action history card me complete file breakdown aur **Full View** inspect karein.`,
+          text: `**Codebase Audit Complete (${data.totalLines.toLocaleString()} Lines Read)**:\n\nHalye Agent ny **${data.filesAudited.length} files** aur **${data.totalLines.toLocaleString()} lines** scan ki hain (read-only). Checks jo waqai chale: ${(data.checksRun || []).join(', ')}.\n\n• **Jo Mila (Real Findings)**: ${data.issuesDiagnosed?.length ? data.issuesDiagnosed.map((i: any) => `${i.title} [${i.severity}]`).join(', ') : 'Kuch nahi mila'}\n• **Jo Kiya (Fixes)**: ${data.fixesApplied?.length ? data.fixesApplied.map((f: any) => f.title).join(', ') : 'Koi fix nahi kiya — audit read-only hai'}\n\nNiche action history card me complete file breakdown aur **Full View** inspect karein.`,
           actionHistory: data.actionHistory,
           actionTaken: `Audited ${data.totalLines.toLocaleString()} Lines across ${data.filesAudited.length} Files`,
           timestamp: new Date().toLocaleTimeString(),
