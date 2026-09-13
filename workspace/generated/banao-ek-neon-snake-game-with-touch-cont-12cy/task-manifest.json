@@ -1,0 +1,15 @@
+{
+  "goal": "banao ek neon snake game with touch controls",
+  "kind": "game",
+  "title": "ek neon snake game with touch controls",
+  "createdBy": "Halye Long-Task Engine",
+  "createdAt": "2026-09-13T08:47:06.063Z",
+  "steps": [
+    "Analyse the goal and lock the deliverable",
+    "Scaffold the output directory and manifest",
+    "Author the playable game build",
+    "Validate the rendered markup",
+    "Repair automatically if validation fails",
+    "Write README and finalise artefacts"
+  ]
+}

@@ -12,5 +12,12 @@
     "insight": "Theme tokens are a safe self-edit surface; component code stays human-reviewed",
     "creator": "Halye",
     "learned_at": "2026-09-12T12:40:07.886473Z"
+  },
+  {
+    "id": "pattern_3",
+    "topic": "playwright sandbox",
+    "insight": "Chromium needs PLAYWRIGHT_BROWSERS_PATH pinned when HOME differs",
+    "creator": "Halye",
+    "learned_at": "2026-09-13T08:46:56.944176Z"
   }
 ]

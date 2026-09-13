@@ -141,6 +141,89 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// LangChain tool bridge for the main chat
+// The studio chat route never reached the LangChain AgentExecutor, so the agent
+// could not use its real tools while talking to the user. For prompts that
+// actually need tools we run the AgentExecutor first and hand the *real*
+// observations to the normal model flow as extra context. The response shape is
+// untouched, so every existing UI surface keeps working.
+// ---------------------------------------------------------------------------
+const LANGCHAIN_BRIDGE_SKIP = ['nvapi-', 'AIzaSy', 'gsk_', 'sk-or-'];
+
+// Extra tool hints, because the squad intent detector is keyword limited.
+const TOOL_HINTS = [
+  'search', 'google', 'dhoondo', 'dhundo', 'talash', 'latest', 'news', 'internet',
+  'terminal', 'bash', 'shell', 'run command', 'command chala', 'uname', 'pip ', 'python',
+  'scrape', 'playwright', 'browse', 'link check', 'http://', 'https://',
+  'read the file', 'file padho', 'git ', 'curl ', 'ls ', 'cat ',
+];
+
+// Pull the real shell result out of an AgentExecutor step so the studio terminal
+// pane can render the exact command, stdout and exit code.
+function extractTerminalStep(steps: any[]) {
+  const step = steps.find((s) => s?.tool === 'terminal_command_executor');
+  if (!step) return null;
+  try {
+    const parsed = JSON.parse(String(step.observation ?? '{}'));
+    return {
+      command: parsed.command || step?.tool_input?.command || '',
+      stdout: parsed.stdout || '',
+      stderr: parsed.stderr || '',
+      exitCode: parsed.returncode ?? parsed.exitCode ?? 0,
+      durationMs: parsed.duration_ms ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.use('/api/gemini/generate', async (req, res, next) => {
+  try {
+    if (req.method !== 'POST') return next();
+    const body = req.body || {};
+    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+    if (prompt.length < 4 || prompt.length > 4000) return next();
+    // Raw API key pastes are handled by the key auto-save path, not by tools.
+    if (LANGCHAIN_BRIDGE_SKIP.some((marker) => prompt.includes(marker))) return next();
+
+    const lowerPrompt = prompt.toLowerCase();
+    const intent = analyzeUserIntentForSquad(prompt);
+    const hintsTools = TOOL_HINTS.some((hint) => lowerPrompt.includes(hint)) || intent.needsPlaywright;
+    if (!intent.needsTools && !hintsTools) return next();
+    // Never hijack an app-build request or an active builder session.
+    if (intent.needsFullCode || body.currentCode) return next();
+
+    const bridgeStartedAt = Date.now();
+    const result = await runLangChainCLI({ action: 'run', prompt });
+    const steps: any[] = Array.isArray(result?.intermediate_steps) ? result.intermediate_steps : [];
+    if (!steps.length) return next();
+
+    const toolNames = steps.map((s: any) => s?.tool).filter(Boolean);
+    const agentOutput = String(result?.output || result?.error || '').trim();
+    const evidence = steps
+      .map((s: any, index: number) => `${index + 1}. ${s?.tool} <- ${JSON.stringify(s?.tool_input ?? {})}`)
+      .join('\n');
+
+    console.log('[LangChain Bridge] Executed real tools:', toolNames.join(', '));
+    // Answer directly with real tool output. Response is a superset of the shape
+    // the studio already understands, so no UI surface regresses.
+    return res.json({
+      success: true,
+      provider: 'langchain-agent',
+      model: `LangChain AgentExecutor (${toolNames.length} tool call${toolNames.length === 1 ? '' : 's'})`,
+      duration: Date.now() - bridgeStartedAt,
+      text: `${agentOutput}\n\n---\n**Real tool execution** (live container):\n\`\`\`\n${evidence}\n\`\`\``,
+      terminalResult: extractTerminalStep(steps) || undefined,
+      suggestedPane: 'chat',
+      toolSteps: steps.map((s: any) => ({ tool: s?.tool, input: s?.tool_input })),
+    });
+  } catch (err: any) {
+    console.warn('[LangChain Bridge] Skipped (tool bridge failed):', err?.message || err);
+  }
+  next();
+});
+
 // ==========================================
 // ACTIVE AI ENGINE (4-Model Squad Ensemble + NIM + Gemini Multi-Provider)
 // ==========================================

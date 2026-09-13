@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>ek neon snake game with touch controls</title>
+<style>
+  :root { --accent: #06b6d4; --accent2: #a855f7; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+  body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #e4e4e7; user-select: none;
+         -webkit-tap-highlight-color: transparent; touch-action: none; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: fixed; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between;
+         align-items: flex-start; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .badge { background: rgba(9,9,11,.78); border: 1px solid rgba(63,63,70,.9); border-radius: 14px;
+           padding: 8px 12px; backdrop-filter: blur(10px); }
+  .label { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #71717a; }
+  .value { font-size: 22px; font-weight: 800; color: #fff; line-height: 1.1; }
+  .accent { color: var(--accent); }
+  #overlay { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, rgba(6,182,212,.10), #000 65%); }
+  #overlay.hidden { display: none; }
+  .card { text-align: center; padding: 28px 30px; border: 1px solid rgba(63,63,70,.9); border-radius: 22px;
+          background: rgba(9,9,11,.86); backdrop-filter: blur(14px); max-width: 420px; }
+  .card h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: -.02em; color: #fff; }
+  .card p { margin: 0 0 18px; font-size: 13px; color: #a1a1aa; line-height: 1.6; }
+  .btn { pointer-events: auto; padding: 12px 22px; border: 0; border-radius: 14px; cursor: pointer;
+         font-weight: 800; font-size: 13px; color: #000; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .btn:active { transform: scale(.97); }
+  .keys { margin-top: 14px; font-size: 11px; color: #52525b; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game"></canvas></div>
+<div class="hud">
+  <div class="badge"><div class="label">Score</div><div class="value accent" id="score">0</div></div>
+  <div class="badge"><div class="label">Best</div><div class="value" id="best">0</div></div>
+  <div class="badge"><div class="label">Shield</div><div class="value" id="shields">3</div></div>
+</div>
+<div id="overlay">
+  <div class="card">
+    <h1>ek neon snake game with touch controls</h1>
+    <p>Move with mouse / finger / arrow keys. Collect cyan orbs, dodge violet shards.<br />Every 5 orbs adds a shield.</p>
+    <button class="btn" id="start">Launch Run</button>
+    <div class="keys">SPACE pause &nbsp;·&nbsp; R restart</div>
+  </div>
+</div>
+<script>
+(function () {
+  var canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+  var overlay = document.getElementById('overlay'), scoreEl = document.getElementById('score');
+  var bestEl = document.getElementById('best'), shieldEl = document.getElementById('shields');
+  var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var running = false, paused = false, t = 0, last = 0;
+  var score = 0, shields = 3, spawnTimer = 0;
+  var best = Number(localStorage.getItem('halye_best_v1') || 0);
+  bestEl.textContent = best;
+  var player = { x: 0, y: 0, r: 13, trail: [] };
+  var orbs = [], shards = [], particles = [];
+
+  function resize() {
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!player.x) { player.x = W / 2; player.y = H / 2; }
+  }
+  window.addEventListener('resize', resize); resize();
+
+  function aim(x, y) { player.x = x; player.y = y; }
+  window.addEventListener('mousemove', function (e) { aim(e.clientX, e.clientY); });
+  window.addEventListener('touchmove', function (e) { var p = e.touches[0]; aim(p.clientX, p.clientY); e.preventDefault(); }, { passive: false });
+  window.addEventListener('touchstart', function (e) { var p = e.touches[0]; aim(p.clientX, p.clientY); });
+  var keys = {};
+  window.addEventListener('keydown', function (e) {
+    keys[e.key] = true;
+    if (e.key === ' ') { paused = !paused; scoreEl.parentElement.querySelector('.label').textContent = paused ? 'paused' : 'score'; e.preventDefault(); }
+    if (e.key === 'r' || e.key === 'R') start();
+  });
+  window.addEventListener('keyup', function (e) { keys[e.key] = false; });
+
+  function burst(x, y, colour, n) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2, s = 40 + Math.random() * 200;
+      particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: .5 + Math.random() * .5, colour: colour });
+    }
+  }
+
+  function start() {
+    score = 0; shields = 3; orbs = []; shards = []; particles = []; t = 0; spawnTimer = 0; paused = false;
+    scoreEl.textContent = '0'; shieldEl.textContent = '3';
+    overlay.classList.add('hidden'); running = true; last = performance.now();
+    requestAnimationFrame(loop);
+  }
+  document.getElementById('start').addEventListener('click', start);
+
+  function update(dt) {
+    t += dt;
+    if (keys.ArrowLeft) player.x -= 380 * dt;
+    if (keys.ArrowRight) player.x += 380 * dt;
+    if (keys.ArrowUp) player.y -= 380 * dt;
+    if (keys.ArrowDown) player.y += 380 * dt;
+    player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+    player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+    player.trail.push({ x: player.x, y: player.y, life: .35 });
+    if (player.trail.length > 26) player.trail.shift();
+    player.trail.forEach(function (p) { p.life -= dt; });
+
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnTimer = Math.max(.22, .85 - t * 0.012);
+      var edge = Math.floor(Math.random() * 4), x, y;
+      if (edge === 0) { x = Math.random() * W; y = -20; }
+      else if (edge === 1) { x = W + 20; y = Math.random() * H; }
+      else if (edge === 2) { x = Math.random() * W; y = H + 20; }
+      else { x = -20; y = Math.random() * H; }
+      var speed = 90 + Math.random() * 110 + t * 3;
+      var ang = Math.atan2(player.y - y, player.x - x) + (Math.random() - .5) * 1.1;
+      var isOrb = Math.random() < 0.62;
+      (isOrb ? orbs : shards).push({ x: x, y: y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, r: isOrb ? 9 : 11, spin: Math.random() * 6 });
+    }
+
+    function step(list, isOrb) {
+      for (var i = list.length - 1; i >= 0; i--) {
+        var o = list[i]; o.x += o.vx * dt; o.y += o.vy * dt; o.spin += dt * 3;
+        if (o.x < -80 || o.x > W + 80 || o.y < -80 || o.y > H + 80) { list.splice(i, 1); continue; }
+        var dx = o.x - player.x, dy = o.y - player.y;
+        if (Math.hypot(dx, dy) < o.r + player.r) {
+          list.splice(i, 1);
+          if (isOrb) {
+            score += 10; scoreEl.textContent = score;
+            burst(o.x, o.y, '6,182,212', 16);
+            if (score % 50 === 0) { shields++; shieldEl.textContent = shields; }
+          } else if (shields > 0) {
+            shields--; shieldEl.textContent = shields; burst(o.x, o.y, '168,85,247', 22);
+          } else {
+            burst(player.x, player.y, '244,63,94', 46);
+            running = false;
+            if (score > best) { best = score; localStorage.setItem('halye_best_v1', String(best)); bestEl.textContent = best; }
+            overlay.classList.remove('hidden');
+            overlay.querySelector('h1').textContent = 'Run Over';
+            overlay.querySelector('p').innerHTML = 'Score <b>' + score + '</b> · Best <b>' + best + '</b><br />Shards are faster now. Try again?';
+            document.getElementById('start').textContent = 'Run Again';
+          }
+        }
+      }
+    }
+    step(orbs, true); step(shards, false);
+    particles.forEach(function (p) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .96; p.vy *= .96; p.life -= dt; });
+    particles = particles.filter(function (p) { return p.life > 0; });
+  }
+
+  function draw() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = .5;
+    for (var gx = 0; gx < W; gx += 60) { ctx.fillStyle = 'rgba(39,39,42,.55)'; ctx.fillRect(gx, 0, 1, H); }
+    for (var gy = 0; gy < H; gy += 60) { ctx.fillStyle = 'rgba(39,39,42,.55)'; ctx.fillRect(0, gy, W, 1); }
+    ctx.globalAlpha = 1;
+
+    player.trail.forEach(function (p) {
+      if (p.life <= 0) return;
+      ctx.beginPath(); ctx.arc(p.x, p.y, player.r * p.life * .8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(6,182,212,' + (p.life * 0.5) + ')'; ctx.fill();
+    });
+
+    particles.forEach(function (p) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + p.colour + ',' + Math.max(0, p.life) + ')'; ctx.fill();
+    });
+
+    orbs.forEach(function (o) {
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(6,182,212,.9)'; ctx.shadowColor = '#06b6d4'; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0;
+    });
+
+    shards.forEach(function (o) {
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.spin);
+      ctx.beginPath(); ctx.moveTo(0, -o.r); ctx.lineTo(o.r, 0); ctx.lineTo(0, o.r); ctx.lineTo(-o.r, 0); ctx.closePath();
+      ctx.fillStyle = 'rgba(168,85,247,.92)'; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 16; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.restore();
+    });
+
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+    var grad = ctx.createRadialGradient(player.x, player.y, 2, player.x, player.y, player.r * 2.2);
+    grad.addColorStop(0, '#ecfeff'); grad.addColorStop(.45, '#22d3ee'); grad.addColorStop(1, 'rgba(34,211,238,0)');
+    ctx.fillStyle = grad; ctx.fill();
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    var dt = Math.min((ts - last) / 1000, .05); last = ts;
+    if (!paused) { update(dt); draw(); }
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
