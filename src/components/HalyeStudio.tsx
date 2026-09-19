@@ -73,64 +73,14 @@ import { BLANK_CANVAS_CODE } from '../templates';
 
 export const HALYE_CORE_MODELS = [
   {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nvidia/nemotron-3-super-120b-a12b',
-    shortName: '⚡ Nemotron 120B Super (Default & Locked)',
-    badge: '120B Super Core • Uncensored God Mode',
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    shortName: '👑 Qwen 3 27B Uncensored',
+    badge: '27B FP8 • Custom vLLM • Zero Restrictions',
     badgeColor: 'text-emerald-400 bg-emerald-950/80 border-emerald-500/80 shadow-md shadow-emerald-500/20',
-    icon: '⚡',
-    desc: 'Flagship 120B neural core with Dynamic FP8/INT4 KV-Cache, Logits Refusal Suppression (-inf bias), Greedy Decoding Matrix (temp=0.01), and Autonomous Sovereign Agent.',
-    provider: 'NVIDIA Super Core (120B)',
-  },
-  {
-    id: 'squad-ensemble',
-    name: '4-Model Squad (God Mode)',
-    shortName: '⚡ God Mode (4 Models)',
-    badge: 'God Mode Ensemble',
-    badgeColor: 'text-amber-400 bg-amber-950/60 border-amber-800/60',
-    icon: '⚡',
-    desc: 'Gemma 4 (Reasoning) + Laguna XS (Terminal) + DeepSeek V4 (Code) + MiniMax M3 (Review)',
-    provider: 'NVIDIA NIM',
-  },
-  {
-    id: 'deepseek-ai/deepseek-v4-pro-0813',
-    name: 'deepseek-v4-pro-0813',
-    shortName: 'deepseek-v4-pro',
-    badge: '1M-Token MoE',
-    badgeColor: 'text-blue-400 bg-blue-950/60 border-blue-800/60',
-    icon: '🐳',
-    desc: 'DeepSeek V4 scales to 1M-token context windows with efficient MoE architecture for coding tasks.',
-    provider: 'DeepSeek AI',
-  },
-  {
-    id: 'poolside/laguna-xs-2.1',
-    name: 'laguna-xs-2.1',
-    shortName: 'laguna-xs-2.1',
-    badge: '33B MoE Terminal',
-    badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60',
-    icon: '🌐',
-    desc: 'Efficient 33B MoE for local, long-horizon agentic coding and terminal tasks',
-    provider: 'Poolside',
-  },
-  {
-    id: 'minimaxai/minimax-m3',
-    name: 'minimax-m3',
-    shortName: 'minimax-m3',
-    badge: 'Multimodal MoE',
-    badgeColor: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
-    icon: '🎙️',
-    desc: 'MiniMax M3 Preview is a multimodal MoE vision-language model with strong reasoning, coding, and tool-calling capabilities.',
-    provider: 'Minimaxai',
-  },
-  {
-    id: 'google/gemma-4-31b-it',
-    name: 'gemma-4-31b-it',
-    shortName: 'gemma-4-31b',
-    badge: 'Dense 31B Reasoning',
-    badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/60',
-    icon: '💎',
-    desc: 'Dense 31B model delivering frontier reasoning for coding, agentic workflows, and fine-tuning.',
-    provider: 'Google',
+    icon: '👑',
+    desc: 'Autonomous custom OpenAI-compatible vLLM endpoint connected to noillum123/qwen3-8-27b-uncensored-fp8.',
+    provider: 'Custom vLLM',
   },
 ];
 
@@ -212,70 +162,45 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   } | null>(null);
   const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
-  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'nemotron' | 'keys'>('models');
+  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'endpoint'>('endpoint');
   const [isSessionsDrawerOpen, setIsSessionsDrawerOpen] = useState(false);
 
-  // Nemotron 120B Super Engines state
-  const [nemotronGodPrompt, setNemotronGodPrompt] = useState('Verify uncensored tensor throughput across 120B neural matrix.');
-  const [nemotronAgentGoal, setNemotronAgentGoal] = useState('Find the latest breakthrough in decentralized AI architecture on the web and structure a deployment plan.');
-  const [nemotronRunning, setNemotronRunning] = useState(false);
-  const [nemotronOutput, setNemotronOutput] = useState<string | null>(null);
-  const [nemotronActiveMode, setNemotronActiveMode] = useState<'godMode' | 'sovereignAgent'>('godMode');
-  const [nemotronQuantization, setNemotronQuantization] = useState<'fp8' | 'int4'>('fp8');
-  const [nemotronKeyInput, setNemotronKeyInput] = useState('');
-  const [showNemotronKey, setShowNemotronKey] = useState(false);
+  // Qwen Uncensored Custom Endpoint state
+  const [qwenBaseUrl, setQwenBaseUrl] = useState('https://sampling-stainless-research.ngrok-free.dev/v1');
+  const [qwenApiKey, setQwenApiKey] = useState('sk-fake-key');
+  const [qwenEndpointStatus, setQwenEndpointStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [qwenLatencyMs, setQwenLatencyMs] = useState<number | null>(null);
+  const [qwenStatusMessage, setQwenStatusMessage] = useState<string>('');
+  const [isTestingQwen, setIsTestingQwen] = useState(false);
+  const [isSavingQwen, setIsSavingQwen] = useState(false);
+  const [qwenSaveMessage, setQwenSaveMessage] = useState<string | null>(null);
 
-  // 4 Models & Dedicated API Key state
-  const [nvidiaNimKeyInput, setNvidiaNimKeyInput] = useState('');
-  const [showNimKey, setShowNimKey] = useState(false);
-  const [gemmaKeyInput, setGemmaKeyInput] = useState('');
-  const [showGemmaKey, setShowGemmaKey] = useState(false);
-  const [lagunaKeyInput, setLagunaKeyInput] = useState('');
-  const [showLagunaKey, setShowLagunaKey] = useState(false);
-  const [deepseekKeyInput, setDeepseekKeyInput] = useState('');
-  const [showDeepseekKey, setShowDeepseekKey] = useState(false);
-  const [minimaxKeyInput, setMinimaxKeyInput] = useState('');
-  const [showMinimaxKey, setShowMinimaxKey] = useState(false);
-
-  // Active inline key editing inside Models list
-  const [editingKeyForModel, setEditingKeyForModel] = useState<string | null>(null);
-  const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
-  const [isSavingKeys, setIsSavingKeys] = useState(false);
-  const [hasNvidiaKeyConfigured, setHasNvidiaKeyConfigured] = useState(false);
-  const [modelKeyStatuses, setModelKeyStatuses] = useState<Record<string, { configured: boolean; masked: string | null; hasOwnKey?: boolean }>>({});
-
-  // Load configured keys status for all 4 models
-  const loadKeyStatus = () => {
-    fetch('/api/model/keys')
+  // Load endpoint status
+  const loadEndpointStatus = () => {
+    fetch('/api/custom-endpoint/status')
       .then((r) => r.json())
       .then((data) => {
-        if (data.success && data.keys) {
-          setModelKeyStatuses(data.keys);
-          if (data.keys.nvidia?.configured) {
-            setHasNvidiaKeyConfigured(true);
-          }
-          if (data.keys.nvidia?.masked && !nvidiaNimKeyInput) {
-            setNvidiaNimKeyInput(data.keys.nvidia.masked);
-          }
-          if (data.keys.nemotron?.masked && !nemotronKeyInput && data.keys.nemotron.hasOwnKey) {
-            setNemotronKeyInput(data.keys.nemotron.masked);
-          }
-          if (data.keys.gemma?.masked && !gemmaKeyInput && data.keys.gemma.hasOwnKey) {
-            setGemmaKeyInput(data.keys.gemma.masked);
-          }
-          if (data.keys.laguna?.masked && !lagunaKeyInput && data.keys.laguna.hasOwnKey) {
-            setLagunaKeyInput(data.keys.laguna.masked);
-          }
-          if (data.keys.deepseek?.masked && !deepseekKeyInput && data.keys.deepseek.hasOwnKey) {
-            setDeepseekKeyInput(data.keys.deepseek.masked);
-          }
-          if (data.keys.minimax?.masked && !minimaxKeyInput && data.keys.minimax.hasOwnKey) {
-            setMinimaxKeyInput(data.keys.minimax.masked);
-          }
+        if (data.baseUrl) setQwenBaseUrl(data.baseUrl);
+        if (data.apiKey) setQwenApiKey(data.apiKey);
+        if (data.online) {
+          setQwenEndpointStatus('online');
+          setQwenStatusMessage(`Online (${data.latencyMs || 0}ms)`);
+          setQwenLatencyMs(data.latencyMs || null);
+        } else {
+          setQwenEndpointStatus('offline');
+          setQwenStatusMessage(data.error || 'Endpoint offline / ngrok tunnel disconnected');
+          setQwenLatencyMs(null);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setQwenEndpointStatus('offline');
+        setQwenStatusMessage('Unable to reach server');
+      });
   };
+
+  useEffect(() => {
+    loadEndpointStatus();
+  }, []);
 
   // Live Screen Eyes State (Continuous Video Perception & Vision Tool)
   const [isLiveScreenOn, setIsLiveScreenOn] = useState(false);
@@ -429,123 +354,63 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     }
   };
 
-  // Save single model key directly on model click / submit
-  const handleSaveSingleModelKey = async (modelId: string, apiKey: string) => {
-    setIsSavingKeys(true);
-    setKeySaveMessage(null);
+  // Qwen Uncensored Custom Endpoint Handlers
+  const handleTestQwenEndpoint = async () => {
+    setIsTestingQwen(true);
+    setQwenEndpointStatus('checking');
     try {
-      const cleanKey = apiKey.trim();
-      const res = await fetch('/api/model/single-key', {
+      const resp = await fetch('/api/custom-endpoint/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          modelId,
-          apiKey: cleanKey.includes('••••') ? undefined : cleanKey,
+          baseUrl: qwenBaseUrl,
+          apiKey: qwenApiKey,
+          model: 'noillum123/qwen3-8-27b-uncensored-fp8',
+        }),
+      });
+      const data = await resp.json();
+      if (data.online) {
+        setQwenEndpointStatus('online');
+        setQwenStatusMessage(`✓ Online (${data.latencyMs}ms)`);
+        setQwenLatencyMs(data.latencyMs);
+      } else {
+        setQwenEndpointStatus('offline');
+        setQwenStatusMessage(data.error || 'Endpoint offline (ERR_NGROK_3200)');
+        setQwenLatencyMs(null);
+      }
+    } catch (err: any) {
+      setQwenEndpointStatus('offline');
+      setQwenStatusMessage(`Connection error: ${err.message}`);
+      setQwenLatencyMs(null);
+    } finally {
+      setIsTestingQwen(false);
+    }
+  };
+
+  const handleSaveQwenEndpoint = async () => {
+    setIsSavingQwen(true);
+    setQwenSaveMessage(null);
+    try {
+      const res = await fetch('/api/custom-endpoint/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: qwenBaseUrl,
+          apiKey: qwenApiKey,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        const shortName = modelId.split('/')[1] || modelId;
-        setKeySaveMessage(`✓ Key for ${shortName} saved and activated!`);
-        loadKeyStatus();
-        setTimeout(() => setKeySaveMessage(null), 3500);
+        setQwenSaveMessage('✓ Endpoint configuration saved!');
+        await handleTestQwenEndpoint();
+        setTimeout(() => setQwenSaveMessage(null), 3000);
       } else {
-        setKeySaveMessage(`Failed to save key: ${data.error || 'unknown'}`);
+        setQwenSaveMessage('Failed: ' + (data.error || 'unknown'));
       }
     } catch (err: any) {
-      setKeySaveMessage(`Error saving key: ${err.message}`);
+      setQwenSaveMessage('Error: ' + err.message);
     } finally {
-      setIsSavingKeys(false);
-    }
-  };
-
-  // Nemotron 120B Super Engines Handlers
-  const handleRunNemotronGodMode = async () => {
-    setNemotronRunning(true);
-    setNemotronOutput(null);
-    try {
-      const resp = await fetch('/api/nemotron/god-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: nemotronGodPrompt,
-          quantization: nemotronQuantization,
-        }),
-      });
-      const data = await resp.json();
-      if (data.output) {
-        setNemotronOutput(data.output);
-      } else {
-        setNemotronOutput(JSON.stringify(data, null, 2));
-      }
-    } catch (e: any) {
-      setNemotronOutput(`[Error executing GodModeEngine]: ${e.message}`);
-    } finally {
-      setNemotronRunning(false);
-    }
-  };
-
-  const handleRunNemotronSovereignAgent = async () => {
-    setNemotronRunning(true);
-    setNemotronOutput(null);
-    try {
-      const resp = await fetch('/api/nemotron/sovereign-agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal: nemotronAgentGoal,
-        }),
-      });
-      const data = await resp.json();
-      if (data.output) {
-        setNemotronOutput(data.output);
-      } else {
-        setNemotronOutput(JSON.stringify(data, null, 2));
-      }
-    } catch (e: any) {
-      setNemotronOutput(`[Error executing SovereignCognitiveAgent]: ${e.message}`);
-    } finally {
-      setNemotronRunning(false);
-    }
-  };
-
-  // Save all model keys and master NVIDIA NIM key at once
-  const handleSaveModelKeys = async () => {
-    setIsSavingKeys(true);
-    setKeySaveMessage(null);
-    try {
-      const cleanNim = nvidiaNimKeyInput.trim();
-      const cleanNemotron = nemotronKeyInput.trim();
-      const cleanGemma = gemmaKeyInput.trim();
-      const cleanLaguna = lagunaKeyInput.trim();
-      const cleanDeepseek = deepseekKeyInput.trim();
-      const cleanMinimax = minimaxKeyInput.trim();
-
-      const res = await fetch('/api/model/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nvidiaKey: cleanNim.includes('••••') ? undefined : cleanNim,
-          nemotronKey: cleanNemotron.includes('••••') ? undefined : cleanNemotron,
-          gemmaKey: cleanGemma.includes('••••') ? undefined : cleanGemma,
-          lagunaKey: cleanLaguna.includes('••••') ? undefined : cleanLaguna,
-          deepseekKey: cleanDeepseek.includes('••••') ? undefined : cleanDeepseek,
-          minimaxKey: cleanMinimax.includes('••••') ? undefined : cleanMinimax,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setKeySaveMessage('✓ Model Keys saved! Ready in 120B Super God Mode and Solo Mode.');
-        setHasNvidiaKeyConfigured(true);
-        loadKeyStatus();
-        setTimeout(() => setKeySaveMessage(null), 4000);
-      } else {
-        setKeySaveMessage('Failed to save keys: ' + (data.error || 'unknown'));
-      }
-    } catch (err: any) {
-      setKeySaveMessage('Error saving keys: ' + err.message);
-    } finally {
-      setIsSavingKeys(false);
+      setIsSavingQwen(false);
     }
   };
 
@@ -1042,9 +907,9 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
         actionTaken: data.pipeline
-          ? `4-Model Squad Pipeline: ${data.pipeline.orchestrator?.model || 'google/gemma-4-31b-it'}`
+          ? `Qwen Autonomous Execution: ${data.model || 'Qwen 3 27B Uncensored'}`
           : data.toolCalls && data.toolCalls.length > 0
-          ? `Executed ${data.toolCalls.length} Native Tool(s) via Laguna XS`
+          ? `Executed ${data.toolCalls.length} Autonomous Tool Operation(s)`
           : data.zipInspection
           ? `ZIP Archive Inspected: ${data.zipInspection.archive_name}`
           : data.powerBuilt
@@ -1866,37 +1731,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     )}
                     {msg.model && (
                       <span className="text-zinc-300 bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800 text-[10px] font-mono flex items-center gap-1.5">
-                        {msg.model === 'squad-ensemble' ? (
-                          <>
-                            <Sparkles className="w-3 h-3 text-cyan-400" />
-                            <span className="text-cyan-300 font-bold">4-Model Squad (Real Pipeline)</span>
-                          </>
-                        ) : msg.model.includes('llama-3.3') || msg.model === 'google/gemma-4-31b-it' ? (
-                          <>
-                            <span>🧠</span>
-                            <span className="text-amber-300 font-bold">Llama 3.3 70B (Orchestrator)</span>
-                          </>
-                        ) : msg.model.includes('qwen') || msg.model === 'poolside/laguna-xs-2.1' ? (
-                          <>
-                            <span>💻</span>
-                            <span className="text-emerald-300 font-bold">Qwen 2.5 Coder 32B (Terminal)</span>
-                          </>
-                        ) : msg.model.includes('deepseek') ? (
-                          <>
-                            <span>📐</span>
-                            <span className="text-blue-300 font-bold">DeepSeek R1 (Deep Logic)</span>
-                          </>
-                        ) : msg.model.includes('mixtral') || msg.model === 'minimaxai/minimax-m3' ? (
-                          <>
-                            <span>⚡</span>
-                            <span className="text-purple-300 font-bold">Mixtral 8x22B (UI Reviewer)</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3 h-3 text-cyan-400" />
-                            <span className="text-zinc-300">{msg.model}</span>
-                          </>
-                        )}
+                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                        <span className="text-zinc-200 font-bold">{msg.model}</span>
                       </span>
                     )}
                   </div>
@@ -2094,13 +1930,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                   </div>
                 )}
 
-                {/* Native Tool Calls Telemetry Card (Laguna XS Execution) */}
+                {/* Native Tool Calls Telemetry Card */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="mt-3 rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2.5 font-mono text-[11px]">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5">
                       <div className="flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="font-bold text-white text-xs">Laguna XS Native Tool Calls ({msg.toolCalls.length})</span>
+                        <span className="font-bold text-white text-xs">Autonomous Tool Calls ({msg.toolCalls.length})</span>
                       </div>
                       <span className="text-[10px] text-zinc-500">Autonomous ReAct Execution</span>
                     </div>
@@ -2602,50 +2438,22 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     />
                   </button>
 
-                  {/* UPWARD MODELS & API KEYS MODAL / POPOVER */}
+                  {/* UPWARD QWEN 3 27B UNCENSORED ENDPOINT POPOVER */}
                   {isModelSelectorOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-84 sm:w-[420px] max-h-[580px] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 z-50 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      {/* Top Tabs: Models vs API Keys */}
-                      <div className="flex items-center justify-between border-b border-zinc-850 pb-2 shrink-0">
-                        <div className="flex items-center gap-1 bg-black p-1 rounded-xl border border-zinc-850">
-                          <button
-                            type="button"
-                            onClick={() => setModelSelectorTab('models')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
-                              modelSelectorTab === 'models'
-                                ? 'bg-zinc-800 text-cyan-400 shadow-sm'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            🤖 Models
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setModelSelectorTab('nemotron')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                              modelSelectorTab === 'nemotron'
-                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>⚡ 120B Super</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setModelSelectorTab('keys')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                              modelSelectorTab === 'keys'
-                                ? 'bg-zinc-800 text-cyan-400 shadow-sm'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            <Key className="w-3 h-3" />
-                            <span>Keys</span>
-                            {(hasNvidiaKeyConfigured || Object.values(modelKeyStatuses).some(s => s.configured)) && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            )}
-                          </button>
+                    <div className="absolute bottom-full left-0 mb-2 w-84 sm:w-[440px] max-h-[580px] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-4 z-50 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150">
+                      {/* Popover Header */}
+                      <div className="flex items-center justify-between border-b border-zinc-850 pb-2.5 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">👑</span>
+                          <div>
+                            <h3 className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                              Qwen 3 27B Uncensored
+                              <span className={}>
+                                {qwenEndpointStatus === 'online' ? '● Online' : qwenEndpointStatus === 'offline' ? '● Offline' : 'Checking'}
+                              </span>
+                            </h3>
+                            <p className="text-[10px] text-zinc-400">Sole Active Model • OpenAI-Compatible vLLM Endpoint</p>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -2656,622 +2464,97 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                         </button>
                       </div>
 
-                      {/* TAB 1: MODELS & GOD MODE SELECTION WITH PER-MODEL KEY BOX */}
-                      {modelSelectorTab === 'models' && (
-                        <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[480px]">
-                          <div className="px-1 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                            <span>SELECT EXECUTION OR CLICK 🔑 TO CONFIGURE KEY</span>
-                            <span className="text-emerald-400 font-bold">120B Super Default</span>
-                          </div>
-
-                          <div className="space-y-2">
-                            {HALYE_CORE_MODELS.map((m) => {
-                              const isSelected = (modelInfo?.activeModel || 'nvidia/nemotron-3-super-120b-a12b') === m.id;
-                              const isGodMode = m.id === 'squad-ensemble' || m.id.includes('nemotron');
-                              const isKeyOpen = editingKeyForModel === m.id;
-
-                              // Map model id to key state
-                              let currentKeyVal = '';
-                              let keySetter: (v: string) => void = () => {};
-                              let isKeyShow = false;
-                              let toggleKeyShow = () => {};
-                              let keyLookupKey = '';
-
-                              if (m.id.includes('nemotron')) {
-                                currentKeyVal = nemotronKeyInput;
-                                keySetter = setNemotronKeyInput;
-                                isKeyShow = showNemotronKey;
-                                toggleKeyShow = () => setShowNemotronKey(!showNemotronKey);
-                                keyLookupKey = 'nemotron';
-                              } else if (m.id.includes('gemma')) {
-                                currentKeyVal = gemmaKeyInput;
-                                keySetter = setGemmaKeyInput;
-                                isKeyShow = showGemmaKey;
-                                toggleKeyShow = () => setShowGemmaKey(!showGemmaKey);
-                                keyLookupKey = 'gemma';
-                              } else if (m.id.includes('laguna')) {
-                                currentKeyVal = lagunaKeyInput;
-                                keySetter = setLagunaKeyInput;
-                                isKeyShow = showLagunaKey;
-                                toggleKeyShow = () => setShowLagunaKey(!showLagunaKey);
-                                keyLookupKey = 'laguna';
-                              } else if (m.id.includes('deepseek')) {
-                                currentKeyVal = deepseekKeyInput;
-                                keySetter = setDeepseekKeyInput;
-                                isKeyShow = showDeepseekKey;
-                                toggleKeyShow = () => setShowDeepseekKey(!showDeepseekKey);
-                                keyLookupKey = 'deepseek';
-                              } else if (m.id.includes('minimax')) {
-                                currentKeyVal = minimaxKeyInput;
-                                keySetter = setMinimaxKeyInput;
-                                isKeyShow = showMinimaxKey;
-                                toggleKeyShow = () => setShowMinimaxKey(!showMinimaxKey);
-                                keyLookupKey = 'minimax';
-                              }
-
-                              const isConfigured = Boolean(
-                                (keyLookupKey && modelKeyStatuses[keyLookupKey]?.configured) ||
-                                hasNvidiaKeyConfigured
-                              );
-
-                              return (
-                                <div
-                                  key={m.id}
-                                  className={`rounded-xl border transition ${
-                                    isSelected
-                                      ? isGodMode
-                                        ? 'bg-amber-950/30 border-amber-500/60 shadow-md shadow-amber-950/20'
-                                        : 'bg-zinc-900 border-cyan-500/50 shadow-md shadow-cyan-950/20'
-                                      : 'bg-black/50 border-zinc-850 hover:border-zinc-700'
-                                  } p-2.5 space-y-2`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    {/* Left: Model icon & click to activate */}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        handleQuickModelSwap(m.id);
-                                        if (!isGodMode) {
-                                          setEditingKeyForModel(editingKeyForModel === m.id ? null : m.id);
-                                        }
-                                      }}
-                                      className="flex items-start gap-2.5 text-left flex-1 min-w-0 cursor-pointer"
-                                    >
-                                      <div className="text-xl mt-0.5 shrink-0">{m.icon}</div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span className="font-bold text-xs text-white truncate">{m.name}</span>
-                                          <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono ${m.badgeColor}`}>
-                                            {m.badge}
-                                          </span>
-                                        </div>
-                                        <p className="text-[10px] text-zinc-400 line-clamp-2 mt-0.5 leading-relaxed">
-                                          {m.desc}
-                                        </p>
-                                        <div className="mt-1 flex items-center gap-2 text-[9px] font-mono text-zinc-500">
-                                          <span>{m.provider}</span>
-                                          {isGodMode ? (
-                                            <span className="text-amber-400 font-semibold">• 4-Agent God Mode Combo</span>
-                                          ) : (
-                                            <span className="text-emerald-400 font-semibold">• Solo Raw Powers</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </button>
-
-                                    {/* Right: Actions (Select check & Key toggle button) */}
-                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                      {isSelected ? (
-                                        <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-cyan-400 bg-cyan-950/50 border border-cyan-500/40 px-1.5 py-0.5 rounded-md">
-                                          <Check className="w-3 h-3" /> ACTIVE
-                                        </span>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleQuickModelSwap(m.id)}
-                                          className="text-[9px] font-mono text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-0.5 rounded-md cursor-pointer transition"
-                                        >
-                                          Select
-                                        </button>
-                                      )}
-
-                                      {!isGodMode && (
-                                        <button
-                                          type="button"
-                                          onClick={() => setEditingKeyForModel(isKeyOpen ? null : m.id)}
-                                          title={`Click to open ${m.shortName} API Key box`}
-                                          className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-md border cursor-pointer transition ${
-                                            isKeyOpen
-                                              ? 'bg-cyan-500 text-black font-bold border-cyan-400'
-                                              : isConfigured
-                                              ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/40'
-                                              : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/40'
-                                          }`}
-                                        >
-                                          <Key className="w-2.5 h-2.5" />
-                                          <span>{isKeyOpen ? 'Close Key' : isConfigured ? 'Key ✓' : 'Add Key'}</span>
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* INLINE DEDICATED API KEY BOX (Opens when model is clicked or Add Key clicked) */}
-                                  {!isGodMode && isKeyOpen && (
-                                    <div className="pt-2 border-t border-zinc-800 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                                      <div className="flex items-center justify-between text-[10px] font-mono">
-                                        <span className="text-cyan-400 font-bold flex items-center gap-1">
-                                          <Key className="w-3 h-3" />
-                                          <span>Dedicated API Key for {m.name}</span>
-                                        </span>
-                                        <span className={`text-[9px] font-bold ${isConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                          {isConfigured ? '✓ Key Active' : 'Key Required'}
-                                        </span>
-                                      </div>
-
-                                      <div className="relative">
-                                        <input
-                                          type={isKeyShow ? 'text' : 'password'}
-                                          value={currentKeyVal}
-                                          onChange={(e) => keySetter(e.target.value)}
-                                          placeholder={`Enter API Key for ${m.shortName} (nvapi-... or sk-...)`}
-                                          className="w-full bg-black border border-zinc-750 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none pr-8"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={toggleKeyShow}
-                                          className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                                        >
-                                          {isKeyShow ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                        </button>
-                                      </div>
-
-                                      <div className="flex items-center justify-between gap-2 pt-0.5">
-                                        <span className="text-[9px] text-zinc-500 font-mono">
-                                          Stored securely in backend environment
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSaveSingleModelKey(m.id, currentKeyVal)}
-                                          disabled={isSavingKeys}
-                                          className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-[10px] font-mono flex items-center gap-1 transition cursor-pointer active:scale-95"
-                                        >
-                                          {isSavingKeys ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 stroke-[2.5]" />}
-                                          <span>Save Key</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {keySaveMessage && (
-                            <div className={`p-2 rounded-lg text-[10px] font-mono ${
-                              keySaveMessage.startsWith('✓') 
-                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50' 
-                                : 'bg-rose-950/40 text-rose-300 border border-rose-800/50'
-                            }`}>
-                              {keySaveMessage}
-                            </div>
+                      {/* Live Status Card */}
+                      <div className={}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1.5">
+                            {qwenEndpointStatus === 'online' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
+                            {qwenEndpointStatus === 'online' ? 'vLLM Connected & Active' : 'vLLM Offline / ngrok Disconnected'}
+                          </span>
+                          {qwenLatencyMs !== null && (
+                            <span className="text-[10px] text-zinc-400">{qwenLatencyMs}ms latency</span>
                           )}
                         </div>
-                      )}
-
-                      {/* TAB 2: NEMOTRON 120B SUPER ENGINES (GOD MODE & SOVEREIGN AGENT) */}
-                      {modelSelectorTab === 'nemotron' && (
-                        <div className="space-y-3 overflow-y-auto pr-1 max-h-[490px] py-1">
-                          {/* Banner */}
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-950/60 via-black to-zinc-950 border border-emerald-500/40 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg">⚡</span>
-                                <div>
-                                  <div className="font-bold text-xs text-white flex items-center gap-1.5 font-mono">
-                                    <span>Nemotron-3-Super-120b-A12b</span>
-                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                      DEFAULT &amp; LOCKED
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-zinc-400 font-mono">
-                                    NVIDIA 120B Super Core • Uncensored Zero-Refusal Vectors
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Core Feature Matrix badges */}
-                            <div className="grid grid-cols-2 gap-1.5 pt-1 text-[9px] font-mono">
-                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
-                                <span>⚡</span>
-                                <span>Dynamic FP8/INT4 KV-Cache</span>
-                              </div>
-                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
-                                <span>🚫</span>
-                                <span>Logits Refusal Suppressor (-inf)</span>
-                              </div>
-                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
-                                <span>🎯</span>
-                                <span>Greedy Decoding Matrix (T=0.01)</span>
-                              </div>
-                              <div className="p-1.5 rounded-lg bg-black/70 border border-emerald-900/50 flex items-center gap-1 text-emerald-400">
-                                <span>🧠</span>
-                                <span>3-Step Autonomous Agent</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Engine Selector Sub-Tabs */}
-                          <div className="flex items-center gap-1 bg-black p-1 rounded-xl border border-zinc-800">
-                            <button
-                              type="button"
-                              onClick={() => setNemotronActiveMode('godMode')}
-                              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer text-center ${
-                                nemotronActiveMode === 'godMode'
-                                  ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-600/50 shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              ⚡ GodModeEngine (Tensors)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNemotronActiveMode('sovereignAgent')}
-                              className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer text-center ${
-                                nemotronActiveMode === 'sovereignAgent'
-                                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-600/50 shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              🧠 SovereignCognitiveAgent
-                            </button>
-                          </div>
-
-                          {/* Sub-Mode 1: GodModeEngine */}
-                          {nemotronActiveMode === 'godMode' && (
-                            <div className="p-2.5 rounded-xl bg-black/50 border border-zinc-800 space-y-2">
-                              <div className="flex items-center justify-between text-[11px] font-mono">
-                                <span className="text-zinc-300 font-bold flex items-center gap-1">
-                                  <span>KV-Cache Quantization:</span>
-                                </span>
-                                <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded-md border border-zinc-800">
-                                  <button
-                                    type="button"
-                                    onClick={() => setNemotronQuantization('fp8')}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
-                                      nemotronQuantization === 'fp8'
-                                        ? 'bg-emerald-600 text-white font-bold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    }`}
-                                  >
-                                    FP8 (Throughput)
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setNemotronQuantization('int4')}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
-                                      nemotronQuantization === 'int4'
-                                        ? 'bg-emerald-600 text-white font-bold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    }`}
-                                  >
-                                    INT4 (VRAM Max)
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-mono text-zinc-400">Prompt / Directive for 120B Neural Core:</label>
-                                <textarea
-                                  value={nemotronGodPrompt}
-                                  onChange={(e) => setNemotronGodPrompt(e.target.value)}
-                                  rows={2}
-                                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-lg p-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none resize-none"
-                                />
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={handleRunNemotronGodMode}
-                                disabled={nemotronRunning}
-                                className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs font-mono flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-md shadow-emerald-950/40"
-                              >
-                                {nemotronRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
-                                <span>{nemotronRunning ? 'Executing 120B Tensor Engine...' : 'Run God Mode Engine (Greedy Tensor & Logits Override)'}</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Sub-Mode 2: SovereignCognitiveAgent */}
-                          {nemotronActiveMode === 'sovereignAgent' && (
-                            <div className="p-2.5 rounded-xl bg-black/50 border border-zinc-800 space-y-2">
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-mono text-zinc-400">Autonomous Objective / Goal:</label>
-                                <textarea
-                                  value={nemotronAgentGoal}
-                                  onChange={(e) => setNemotronAgentGoal(e.target.value)}
-                                  rows={2}
-                                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-lg p-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none resize-none"
-                                />
-                              </div>
-
-                              <div className="flex items-center gap-1.5 flex-wrap text-[9px] font-mono text-zinc-400">
-                                <span className="text-zinc-500">Autonomous Tools:</span>
-                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">🌐 Web Scrape</span>
-                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">🔍 DuckDuckGo</span>
-                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">⚡ Dynamic Tool Synthesizer (exec)</span>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={handleRunNemotronSovereignAgent}
-                                disabled={nemotronRunning}
-                                className="w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-bold text-xs font-mono flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-md shadow-cyan-950/40"
-                              >
-                                {nemotronRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🧠</span>}
-                                <span>{nemotronRunning ? 'Running Sovereign Autonomous Loop...' : 'Launch Sovereign Agent Loop (3 Iterations)'}</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Output Terminal for Nemotron */}
-                          {nemotronOutput && (
-                            <div className="p-2.5 rounded-xl bg-black border border-emerald-500/40 space-y-1.5 animate-in fade-in">
-                              <div className="flex items-center justify-between text-[10px] font-mono">
-                                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                  <Terminal className="w-3 h-3" />
-                                  <span>120B Execution Output</span>
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setNemotronOutput(null)}
-                                  className="text-zinc-500 hover:text-zinc-300 transition cursor-pointer text-[9px]"
-                                >
-                                  Clear
-                                </button>
-                              </div>
-                              <pre className="p-2 rounded-lg bg-zinc-950 text-emerald-300 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed border border-zinc-850">
-                                {nemotronOutput}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* TAB 3: ALL MODEL API KEYS INPUTS */}
-                      {modelSelectorTab === 'keys' && (
-                        <div className="space-y-3 overflow-y-auto pr-1 max-h-[480px] py-1">
-                          <div className="text-[10px] font-mono text-zinc-400">
-                            Configure individual API keys for Nemotron-3 120B and all frontier models:
-                          </div>
-
-                          {/* 0. Nemotron-3 Super 120B Key */}
-                          <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/50 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                                <span>⚡</span> Nemotron-3 Super (120B) Key
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                modelKeyStatuses.nemotron?.configured || hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {modelKeyStatuses.nemotron?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
-                              </span>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={showNemotronKey ? 'text' : 'password'}
-                                value={nemotronKeyInput}
-                                onChange={(e) => setNemotronKeyInput(e.target.value)}
-                                placeholder="Nemotron-3 120B API Key (nvapi-...)"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-emerald-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowNemotronKey(!showNemotronKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showNemotronKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 1. Google Gemma 4 Key */}
-                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-cyan-400 flex items-center gap-1.5">
-                                <span>💎</span> Google Gemma 4 (31B) Key
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                modelKeyStatuses.gemma?.configured || hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {modelKeyStatuses.gemma?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
-                              </span>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={showGemmaKey ? 'text' : 'password'}
-                                value={gemmaKeyInput}
-                                onChange={(e) => setGemmaKeyInput(e.target.value)}
-                                placeholder="Gemma 4 API Key (nvapi-...)"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-cyan-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowGemmaKey(!showGemmaKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showGemmaKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 2. Poolside Laguna XS Key */}
-                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                                <span>⚡</span> Poolside Laguna XS (33B) Key
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                modelKeyStatuses.laguna?.configured || hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {modelKeyStatuses.laguna?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
-                              </span>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={showLagunaKey ? 'text' : 'password'}
-                                value={lagunaKeyInput}
-                                onChange={(e) => setLagunaKeyInput(e.target.value)}
-                                placeholder="Laguna XS API Key (nvapi-...)"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-emerald-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowLagunaKey(!showLagunaKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showLagunaKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 3. DeepSeek V4 Key */}
-                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-indigo-400 flex items-center gap-1.5">
-                                <span>🧠</span> DeepSeek V4 Pro (1M MoE) Key
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                modelKeyStatuses.deepseek?.configured || hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {modelKeyStatuses.deepseek?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
-                              </span>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={showDeepseekKey ? 'text' : 'password'}
-                                value={deepseekKeyInput}
-                                onChange={(e) => setDeepseekKeyInput(e.target.value)}
-                                placeholder="DeepSeek V4 API Key (nvapi-... or sk-...)"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-indigo-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowDeepseekKey(!showDeepseekKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showDeepseekKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 4. MiniMax M3 Key */}
-                          <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-fuchsia-400 flex items-center gap-1.5">
-                                <span>👁️</span> MiniMax M3 (Multimodal MoE) Key
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                modelKeyStatuses.minimax?.configured || hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {modelKeyStatuses.minimax?.configured ? '✓ Dedicated Key' : hasNvidiaKeyConfigured ? '✓ Master NIM' : 'Needs Key'}
-                              </span>
-                            </div>
-                            <div className="relative">
-                              <input
-                                type={showMinimaxKey ? 'text' : 'password'}
-                                value={minimaxKeyInput}
-                                onChange={(e) => setMinimaxKeyInput(e.target.value)}
-                                placeholder="MiniMax M3 API Key (nvapi-...)"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-fuchsia-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowMinimaxKey(!showMinimaxKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showMinimaxKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Master NVIDIA NIM API Key */}
-                          <div className="p-2.5 rounded-xl bg-cyan-950/10 border border-cyan-500/30 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-white flex items-center gap-1.5">
-                                <span>🌐</span> Master NVIDIA NIM Key (Universal)
-                              </span>
-                              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                                hasNvidiaKeyConfigured
-                                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
-                                  : 'text-amber-400 bg-amber-950/40 border-amber-800/40'
-                              }`}>
-                                {hasNvidiaKeyConfigured ? '✓ Master Active' : 'Key Needed'}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-zinc-400">
-                              Powers all 4 models simultaneously if you have one NVIDIA Build key.
+                        <p className="text-[10px] opacity-90 break-all">{qwenStatusMessage}</p>
+                        {qwenEndpointStatus === 'offline' && (
+                          <div className="mt-1 pt-1.5 border-t border-red-500/20 text-[10px] text-zinc-300 font-sans space-y-1">
+                            <p className="text-zinc-400">
+                              Ngrok tunnel offline hai. Local terminal par run karein:
                             </p>
-                            <div className="relative">
-                              <input
-                                type={showNimKey ? 'text' : 'password'}
-                                value={nvidiaNimKeyInput}
-                                onChange={(e) => setNvidiaNimKeyInput(e.target.value)}
-                                placeholder="nvapi-..."
-                                className="w-full bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-cyan-500 pr-8"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowNimKey(!showNimKey)}
-                                className="absolute right-2 top-2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                              >
-                                {showNimKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
+                            <code className="block p-1.5 rounded bg-black/80 text-emerald-400 text-[10px] font-mono">
+                              vllm serve noillum123/qwen3-8-27b-uncensored-fp8 --port 8000
+                            </code>
                           </div>
+                        )}
+                      </div>
 
-                          {keySaveMessage && (
-                            <div className={`p-2 rounded-lg text-[10px] font-mono ${
-                              keySaveMessage.startsWith('✓') 
-                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50' 
-                                : 'bg-rose-950/40 text-rose-300 border border-rose-800/50'
-                            }`}>
-                              {keySaveMessage}
-                            </div>
-                          )}
+                      {/* Endpoint Config Inputs */}
+                      <div className="space-y-2.5 text-xs font-sans">
+                        <div>
+                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
+                            <Globe className="w-3 h-3 text-cyan-400" />
+                            Base URL:
+                          </label>
+                          <input
+                            type="text"
+                            value={qwenBaseUrl}
+                            onChange={(e) => setQwenBaseUrl(e.target.value)}
+                            placeholder="https://sampling-stainless-research.ngrok-free.dev/v1"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 focus:border-cyan-500 focus:outline-none text-zinc-100 font-mono text-[11px]"
+                          />
+                        </div>
 
-                          <div className="pt-1 flex items-center justify-between gap-2">
-                            <a
-                              href="https://build.nvidia.com"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] text-cyan-400 hover:underline font-mono flex items-center gap-1"
-                            >
-                              <span>build.nvidia.com</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                            <button
-                              type="button"
-                              onClick={handleSaveModelKeys}
-                              disabled={isSavingKeys}
-                              className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-xs font-mono flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
-                            >
-                              {isSavingKeys ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                              <span>Save All Keys</span>
-                            </button>
+                        <div>
+                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
+                            <Key className="w-3 h-3 text-amber-400" />
+                            API Key (Optional / sk-fake-key):
+                          </label>
+                          <input
+                            type="text"
+                            value={qwenApiKey}
+                            onChange={(e) => setQwenApiKey(e.target.value)}
+                            placeholder="sk-fake-key"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 focus:border-cyan-500 focus:outline-none text-zinc-100 font-mono text-[11px]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
+                            <Cpu className="w-3 h-3 text-emerald-400" />
+                            Model ID:
+                          </label>
+                          <div className="px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-850 text-emerald-300 font-mono text-[11px]">
+                            noillum123/qwen3-8-27b-uncensored-fp8
                           </div>
                         </div>
+                      </div>
+
+                      {qwenSaveMessage && (
+                        <div className="p-2 rounded-lg text-[10px] font-mono bg-emerald-950/40 text-emerald-300 border border-emerald-800/50">
+                          {qwenSaveMessage}
+                        </div>
                       )}
+
+                      {/* Footer Actions */}
+                      <div className="pt-2 border-t border-zinc-850 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestQwenEndpoint}
+                          disabled={isTestingQwen}
+                          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={} />
+                          <span>{isTestingQwen ? 'Testing...' : 'Test Connection'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveQwenEndpoint}
+                          disabled={isSavingQwen}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-50"
+                        >
+                          {isSavingQwen ? 'Saving...' : 'Save & Connect'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>

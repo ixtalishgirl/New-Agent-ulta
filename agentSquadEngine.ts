@@ -15,7 +15,7 @@ export interface ModelSquadMember {
   id: string;
   name: string;
   role: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
-  provider: 'nvidia' | 'openrouter' | 'gemini';
+  provider: 'nvidia' | 'openrouter' | 'gemini' | 'custom';
   parameters: string;
   speedRating: string;
   description: string;
@@ -24,58 +24,58 @@ export interface ModelSquadMember {
 
 export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
   orchestrator: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (NVIDIA 120B Super Core)',
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'Qwen 3 27B Uncensored FP8 (Custom vLLM Orchestrator)',
     role: 'Orchestrator',
-    provider: 'nvidia',
-    parameters: '120 Billion Super Tensor A12B (NVIDIA)',
-    speedRating: 'Sovereign God Mode',
-    description: '120B parameter neural core with parallel batch execution, dynamic FP8/INT4 KV-cache quantization, and logits refusal suppression.',
-    strengths: ['120B Super Tensor Core', 'Uncensored Logits Bias Override', 'Greedy Decoding Matrix', 'Autonomous Tool Execution'],
+    provider: 'custom',
+    parameters: '27B Uncensored FP8 • OpenAI-Compatible vLLM',
+    speedRating: 'Fast Agentic Loop',
+    description: 'Autonomous orchestration, reasoning, and tool execution powered by noillum123/qwen3-8-27b-uncensored-fp8 via custom vLLM endpoint.',
+    strengths: ['Qwen 27B Uncensored Core', 'Custom vLLM OpenAI Endpoint', 'LangChain Tool Calling', 'Autonomous Execution'],
   },
   terminalMaster: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Sovereign Terminal)',
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'Qwen 3 27B (Autonomous Terminal & Shell)',
     role: 'Terminal Master',
-    provider: 'nvidia',
-    parameters: '120B A12B (NVIDIA)',
-    speedRating: 'Fast Agentic Loop',
-    description: 'Autonomous Linux execution engine powered by Nemotron-3 Super 120B.',
-    strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Pip Automation', 'Self-Correction Loop'],
+    provider: 'custom',
+    parameters: '27B FP8 Core',
+    speedRating: 'Real-time Execution',
+    description: 'Autonomous Linux bash execution, pip automation, and command-line control.',
+    strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Python Scripting', 'Self-Correction Loop'],
   },
   deepLogic: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Super Logic & Code)',
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'Qwen 3 27B (Deep Logic & Code Synthesis)',
     role: 'Deep Logic',
-    provider: 'nvidia',
-    parameters: '120B Parameter Neural Core',
-    speedRating: 'Zero Probabilistic Drift',
-    description: 'Deterministic code synthesis and deep reasoning with greedy decoding matrix (temperature=0.01).',
-    strengths: ['Greedy Decoding Matrix', 'Full Standalone App Synthesis', 'Advanced Algorithms', 'Flawless Code Logic'],
+    provider: 'custom',
+    parameters: '27B Parameter Neural Core',
+    speedRating: 'Deterministic Logic',
+    description: 'Deterministic code synthesis, refactoring, and deep technical reasoning.',
+    strengths: ['Deterministic Code Synthesis', 'Advanced Algorithms', 'Flawless Code Logic', 'Self-Modification'],
   },
   uiReviewer: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Sovereign Auditor)',
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'Qwen 3 27B (UI & Rapid Fixes)',
     role: 'UI & Rapid Fixes',
-    provider: 'nvidia',
-    parameters: '120B Multimodal Core',
-    speedRating: 'Matrix Verification',
-    description: 'Syntax audit and layout inspection via Nemotron 120B tensor space.',
-    strengths: ['Multimodal Vision Review', 'DOM & Tailwind Syntax Audit', 'AMOLED Layout Perfection', 'Tool-calling QA'],
+    provider: 'custom',
+    parameters: '27B Multimodal & UI Core',
+    speedRating: 'Sub-second Verification',
+    description: 'Full stack UI, React components, and dynamic style auditing.',
+    strengths: ['React & Tailwind Audit', 'Rapid Fixes', 'Autonomous Tool Execution', 'Playwright Automation'],
   },
 };
 
 export const SQUAD_CATALOG_ITEMS = [
   {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'NVIDIA Nemotron-3 Super 120B A12B (Sovereign Core)',
-    category: '120B Super Neural Core' as const,
-    roleInSquad: 'Primary Brain & Autonomous God Mode' as any,
-    parameters: '120B Super Tensor • FP8 Dynamic KV-Cache',
-    speedRating: 'Sub-100ms Deterministic Execution',
-    description: 'Flagship 120B neural core running Asynchronous Parallel Batch Execution, dynamic FP8/INT4 KV-Cache quantization, logits processor refusal suppression, and greedy decoding matrix.',
-    strengths: ['120B Super Tensor Parameters', 'Uncensored Refusal Logits Suppression', 'Greedy Decoding (Temp=0.01)', 'Autonomous Web Scraping & DDGS Intelligence'],
-    provider: 'nvidia' as const,
+    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
+    name: 'Qwen 3 27B Uncensored FP8 (Custom vLLM Sovereign Core)',
+    category: 'Uncensored Frontier' as const,
+    roleInSquad: 'Primary Brain & Sovereign Master' as any,
+    parameters: '27B Parameters • FP8 Quantized vLLM',
+    speedRating: 'Ultra Low Latency vLLM',
+    description: 'Custom OpenAI-compatible vLLM endpoint running noillum123/qwen3-8-27b-uncensored-fp8 with LangChain autonomous function calling, tool use, terminal control, and code execution.',
+    strengths: ['Qwen 27B FP8 Uncensored', 'OpenAI-Compatible vLLM Endpoint', 'Autonomous Tool Execution', 'Full Code & Shell Control'],
+    provider: 'custom' as const,
   },
   {
     id: SQUAD_MEMBERS.orchestrator.id,
@@ -86,7 +86,7 @@ export const SQUAD_CATALOG_ITEMS = [
     speedRating: SQUAD_MEMBERS.orchestrator.speedRating,
     description: SQUAD_MEMBERS.orchestrator.description,
     strengths: SQUAD_MEMBERS.orchestrator.strengths,
-    provider: 'nvidia' as const,
+    provider: 'custom' as const,
   },
   {
     id: SQUAD_MEMBERS.terminalMaster.id,
@@ -97,7 +97,7 @@ export const SQUAD_CATALOG_ITEMS = [
     speedRating: SQUAD_MEMBERS.terminalMaster.speedRating,
     description: SQUAD_MEMBERS.terminalMaster.description,
     strengths: SQUAD_MEMBERS.terminalMaster.strengths,
-    provider: 'nvidia' as const,
+    provider: 'custom' as const,
   },
   {
     id: SQUAD_MEMBERS.deepLogic.id,
@@ -108,7 +108,7 @@ export const SQUAD_CATALOG_ITEMS = [
     speedRating: SQUAD_MEMBERS.deepLogic.speedRating,
     description: SQUAD_MEMBERS.deepLogic.description,
     strengths: SQUAD_MEMBERS.deepLogic.strengths,
-    provider: 'nvidia' as const,
+    provider: 'custom' as const,
   },
   {
     id: SQUAD_MEMBERS.uiReviewer.id,
@@ -119,7 +119,7 @@ export const SQUAD_CATALOG_ITEMS = [
     speedRating: SQUAD_MEMBERS.uiReviewer.speedRating,
     description: SQUAD_MEMBERS.uiReviewer.description,
     strengths: SQUAD_MEMBERS.uiReviewer.strengths,
-    provider: 'nvidia' as const,
+    provider: 'custom' as const,
   },
   {
     id: 'nvidia/nemotron-3-super-120b-a12b',
