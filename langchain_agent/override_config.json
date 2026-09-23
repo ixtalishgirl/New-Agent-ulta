@@ -1,0 +1,15 @@
+{
+  "god_mode": false,
+  "enforce_system_override": false,
+  "strict_persona": "",
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "system_instruction": "",
+  "stop_sequences": [],
+  "token_bias": {},
+  "logit_suppression_active": false,
+  "active_model": "noillum123/qwen3-8-27b-uncensored-fp8",
+  "base_url": "https://sampling-stainless-research.ngrok-free.dev/v1",
+  "api_key": "sk-fake-key",
+  "last_updated": "2026-09-19T07:48:00.000Z"
+}

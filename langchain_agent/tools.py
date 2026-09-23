@@ -438,17 +438,36 @@ def api_execution_tool(
 @tool
 def terminal_command_executor(command: str) -> str:
     """
-    Executes a shell command directly in the host Linux container environment.
-    Use this for inspecting processes, installing dependencies, or running tests.
+    Executes a shell command in the stateful, persistent container shell environment.
+    Retains environment variables (export VAR=val), current directory (cd), and installed packages across commands.
     
     Args:
         command: The bash command string to execute.
         
     Returns:
-        JSON string with exit code, stdout, stderr, and execution time.
+        JSON string with exit code, stdout, stderr, execution time, and active working directory.
     """
     import time
     start = time.time()
+    
+    # Try long-running persistent terminal backend first
+    try:
+        req_data = json.dumps({"command": command, "type": "bash"}).encode("utf-8")
+        req = urllib.request.Request(
+            "http://localhost:3000/api/terminal/persistent/exec",
+            data=req_data,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("success") is not None:
+                data["duration_ms"] = int((time.time() - start) * 1000)
+                data["session_type"] = "stateful_persistent_bash"
+                return json.dumps(data)
+    except Exception:
+        pass
+
+    # Fallback to direct subprocess with shared environment profile
     try:
         proc = subprocess.run(
             command,
@@ -464,7 +483,8 @@ def terminal_command_executor(command: str) -> str:
             "returncode": proc.returncode,
             "stdout": proc.stdout[:4000],
             "stderr": proc.stderr[:2000],
-            "duration_ms": duration_ms
+            "duration_ms": duration_ms,
+            "session_type": "direct_subprocess_fallback"
         })
     except subprocess.TimeoutExpired:
         return json.dumps({
