@@ -42,6 +42,7 @@ export interface WebInspectionResult {
   };
   human_readable_summary: string;
   error?: string;
+  visionAnalysis?: VisionAnalysisResult;
 }
 
 export interface ActionHistoryFileRead {
@@ -125,11 +126,12 @@ export interface ChatMessage {
   model?: string;
   provider?: string;
   actionTaken?: string;
-  pipeline?: AgenticSquadPipeline;
+  pipeline?: AgentPipeline;
   toolCalls?: AgentToolCall[];
   dialogue?: InterAgentMessage[];
   actionHistory?: ActionHistoryItem;
   projectScopeUpdate?: Partial<ProjectScope>;
+  customModelConfig?: { modelId: string; maxTokens?: number };
 }
 
 export interface ChatSession {
@@ -188,7 +190,7 @@ export interface HalyePowerItem {
 
 export interface AgentToolCall {
   id: string;
-  tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation';
+  tool: 'execute_bash_command' | 'run_pip_installer' | 'run_python_script' | 'trigger_playwright_automation' | 'web_inspection' | 'terminal_command_executor';
   args: Record<string, any>;
   result: {
     success: boolean;
@@ -216,52 +218,51 @@ export interface InterAgentMessage {
   timestamp?: string;
 }
 
-export interface AgenticSquadPipeline {
+/**
+ * Telemetry for the single-engine agent loop: the one configured inference engine
+ * plans (orchestrator) and the same engine executes tools (executionMaster).
+ */
+export interface AgentPipeline {
   orchestrator: {
-    model: string; // google/gemma-4-31b-it
+    engine: 'custom-llm';
     role: string;
     plan: string;
     steps: string[];
     delegatedTo: string;
   };
   executionMaster?: {
-    model: string; // poolside/laguna-xs-2.1
+    engine: 'custom-llm';
     role: string;
     actionSummary: string;
     selfCorrectionLoops: number;
     success: boolean;
   };
-  deepReasoner?: {
-    model: string; // deepseek-ai/deepseek-v4-pro-0813
-    role: string;
-    codeArchitecture?: string;
-    summary?: string;
-  };
-  reviewer?: {
-    model: string; // minimaxai/minimax-m3
-    role: string;
-    syntaxScore: number;
-    passedReview: boolean;
-    fixesApplied: string[];
-  };
   dialogue?: InterAgentMessage[];
 }
 
-export interface NvidiaModelCatalogItem {
-  id: string;
-  name: string;
-  category: 'Running Active' | '4-Model Squad (Ensemble)' | 'Fastest / High Speed' | 'Largest / High Capacity' | 'Flagship Reasoning & Coding' | 'Multimodal Vision' | 'Uncensored Frontier';
-  parameters: string;
-  speedRating: string;
-  description: string;
-  strengths: string[];
-  provider?: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
-  roleInSquad?: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
+export interface CustomModelConfig {
+  modelName: string;
+  apiUrl: string;
+  apiKey?: string;
+  maxTokens?: number;
+  extraHeaders?: Record<string, string>;
 }
 
-export interface CustomModelSettings {
-  provider: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
-  model: string;
-  apiKey?: string;
-  baseUrl?: string;
+export interface RunResult {
+  success: boolean;
+  input: string;
+  output: string;
+  intermediate_steps: Array<{
+    tool: string;
+    tool_input: any;
+    thought_log?: string;
+    observation: string;
+  }>;
+  action_logs?: any[];
+  memory_history?: { role: string; content: string }[];
+  execution_time_ms: number;
+  model_engine: string;
+  framework: string;
+  tools_available: string[];
+  timestamp: number;
 }

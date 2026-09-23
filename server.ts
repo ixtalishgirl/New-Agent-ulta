@@ -4,7 +4,6 @@ import path from 'path';
 import fs from 'fs';
 import vm from 'vm';
 import { exec, spawn, execFile } from 'child_process';
-import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { ensurePythonToolchain, getPythonEnvStatus } from './halyePythonEnv';
 import { auditCodebase } from './halyeCodebaseAudit';
@@ -19,16 +18,15 @@ import {
 } from './halyeCognitivePlanner';
 import { BLANK_CANVAS_CODE, DEFAULT_SAAS_WEBSITE_CODE } from './src/templates';
 import {
-  SQUAD_MEMBERS,
-  SQUAD_CATALOG_ITEMS,
+  CUSTOM_LLM_ENGINE,
   NATIVE_TOOL_SCHEMAS,
   execute_bash_command,
   run_pip_installer,
   run_python_script,
   trigger_playwright_automation,
   executeToolWithSelfCorrection,
-  analyzeUserIntentForSquad,
-  miniMaxSyntaxReview,
+  analyzeUserIntent,
+  reviewGeneratedCode,
   create_and_register_custom_tool,
   execute_custom_tool,
   REGISTERED_CUSTOM_TOOLS,
@@ -69,15 +67,12 @@ if (!process.env.PATH?.includes('/usr/local/bin')) {
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-
-// ---------------------------------------------------------------------------
+app.use(express.json({ limit: '50mb' }));// ---------------------------------------------------------------------------
 // Python tool-runtime bootstrap
 // The platform install step is Node-only, so LangChain / Playwright / bs4 are not
 // present in a fresh sandbox and every Python-backed tool silently fails. Kick the
 // installer off in the background (never awaited: boot must stay fast) and expose
-// the live state so the UI and the agent can see whether their tools are usable.
-// ---------------------------------------------------------------------------
+// the live state so the UI and the agent can see whether their tools are usable.// ---------------------------------------------------------------------------
 void ensurePythonToolchain();
 
 app.get('/api/python/env', (_req, res) => {
@@ -100,62 +95,6 @@ app.post('/api/codebase/read-and-diagnose', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Audit failed' });
   }
-});
-
-// ---------------------------------------------------------------------------
-// Nemotron key intake + key persistence
-// The studio UI posts `nemotronKey`, which the /api/model/keys route never read,
-// so the field silently stayed empty. Normalise it here (before the route runs)
-// and re-persist keys to the local JSON keystore after every save.
-// ---------------------------------------------------------------------------
-const NEMOTRON_MODEL_ID = 'nvidia/nemotron-3-super-120b-a12b';
-
-app.use('/api/model/keys', (req, res, next) => {
-  if (req.method === 'POST' && req.body && typeof req.body === 'object') {
-    const body = req.body as any;
-    const rawNemotron =
-      body.nemotronKey ?? body.nemotron ?? body.keys?.nemotron ?? body.modelKeys?.[NEMOTRON_MODEL_ID];
-    const nemotronLooksMasked = typeof rawNemotron === 'string' && rawNemotron.includes('••••');
-    if (rawNemotron !== undefined && rawNemotron !== null && !nemotronLooksMasked) {
-      const key = String(rawNemotron).trim();
-      DEDICATED_MODEL_KEYS[NEMOTRON_MODEL_ID] = key;
-      process.env.NEMOTRON_API_KEY = key;
-      // Empty string deliberately clears the key.
-      activeEngineSettings.apiKey = key;
-      // Keep the legacy body shape in sync for the downstream handler.
-      body.keys = { ...(body.keys || {}), nemotron: key };
-      body.modelKeys = { ...(body.modelKeys || {}), [NEMOTRON_MODEL_ID]: key };
-    }
-    // Report the Nemotron key back in the save response as well.
-    const originalJson = res.json.bind(res);
-    res.json = ((payload: any) => {
-      if (payload && typeof payload === 'object' && payload.configured) {
-        payload.configured.nemotron = Boolean(
-          process.env.NEMOTRON_API_KEY || DEDICATED_MODEL_KEYS[NEMOTRON_MODEL_ID]
-        );
-      }
-      return originalJson(payload);
-    }) as typeof res.json;
-    res.on('finish', persistModelKeys);
-  }
-  next();
-});
-
-app.use('/api/model/single-key', (req, res, next) => {
-  if (req.method !== 'POST') return next();
-  const raw = (req.body || {}).apiKey;
-  const looksMasked = typeof raw === 'string' && raw.includes('••••');
-  const isEmpty = raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '');
-  if (looksMasked || isEmpty) {
-    // Guard: an untouched (masked) or empty field must never wipe a stored key.
-    return res.json({
-      success: true,
-      unchanged: true,
-      message: 'Existing key kept — paste a new key to replace it.',
-    });
-  }
-  res.on('finish', persistModelKeys);
-  next();
 });
 
 // ---------------------------------------------------------------------------
@@ -185,6 +124,201 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Custom self-hosted LLM endpoint (own inference engine)
+// ---------------------------------------------------------------------------
+app.get('/api/custom-llm/status', (_req, res) => {
+  const cfg = getCustomLlmConfig();
+  res.json({
+    success: true,
+    configured: cfg.configured,
+    url: cfg.url,
+    hasAuthKey: Boolean(cfg.key),
+    maxTokens: cfg.maxTokens,
+    timeoutMs: cfg.timeoutMs,
+    modelAliases: CUSTOM_LLM_MODEL_ALIASES,
+    takesOverWhen: 'Always. This is the only inference engine in the project; set CUSTOM_LLM_ENABLED=false only to switch the agent off.',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Local model registry: the single place where the user's own endpoint lives.
+// The Models panel reads/writes this: add, remove, replace any self-hosted
+// model by pasting its URL (and optional key). Stored in localSettingsStore
+// (persisted via the same mechanism as the rest of the runtime settings), so
+// the endpoint survives restarts without touching env files.
+// ---------------------------------------------------------------------------
+const LOCAL_MODELS_FILE = path.resolve(process.cwd(), 'src', 'custom_models.json');
+
+interface LocalModelRecord {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey?: string;
+  maxTokens: number;
+  extraHeaders?: Record<string, string>;
+  createdAt: string;
+}
+
+function loadLocalModels(): LocalModelRecord[] {
+  try {
+    if (!fs.existsSync(LOCAL_MODELS_FILE)) return [];
+    const parsed = JSON.parse(fs.readFileSync(LOCAL_MODELS_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalModels(models: LocalModelRecord[]): void {
+  fs.mkdirSync(path.dirname(LOCAL_MODELS_FILE), { recursive: true });
+  fs.writeFileSync(LOCAL_MODELS_FILE, JSON.stringify(models, null, 2), 'utf8');
+}
+
+app.get('/api/models/local/list', (_req, res) => {
+  const models = loadLocalModels().map(({ apiKey: _k, ...rest }) => rest);
+  res.json({ success: true, models });
+});
+
+app.post('/api/models/local', (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const apiUrl = String(req.body?.apiUrl || '').trim();
+  if (!name) return res.status(400).json({ success: false, error: 'Model name is required.' });
+  if (!/^https?:\/\//i.test(apiUrl)) {
+    return res.status(400).json({ success: false, error: 'A valid http/https endpoint URL is required.' });
+  }
+
+  const models = loadLocalModels();
+  if (models.some((m) => m.name.toLowerCase() === name.toLowerCase())) {
+    return res.status(400).json({ success: false, error: 'A model with this name already exists — replace or delete it first.' });
+  }
+
+  let extraHeaders: Record<string, string> | undefined;
+  if (req.body?.extraHeaders && typeof req.body.extraHeaders === 'object' && !Array.isArray(req.body.extraHeaders)) {
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.body.extraHeaders as Record<string, unknown>)) {
+      if (typeof k === 'string' && typeof v === 'string' && k.trim().length > 0) {
+        cleaned[k] = v;
+      }
+    }
+    extraHeaders = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+  const rawMax = Number(req.body?.maxTokens);
+  const maxTokens = Number.isFinite(rawMax) && rawMax > 0 ? Math.max(1, Math.min(rawMax, 128000)) : 512;
+
+  const record: LocalModelRecord = {
+    id: `model-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    apiUrl,
+    apiKey: req.body?.apiKey ? String(req.body.apiKey) : undefined,
+    maxTokens,
+    extraHeaders: extraHeaders && Object.keys(extraHeaders).length > 0 ? extraHeaders : undefined,
+    createdAt: new Date().toISOString(),
+  };
+  models.push(record);
+  saveLocalModels(models);
+  res.status(201).json({ success: true, modelId: record.id });
+});
+
+app.delete('/api/models/local/:modelId', (req, res) => {
+  const models = loadLocalModels();
+  const index = models.findIndex((m) => m.id === req.params.modelId);
+  if (index === -1) {
+    return res.status(404).json({ success: false, error: 'model not found' });
+  }
+  models.splice(index, 1);
+  saveLocalModels(models);
+  res.json({ success: true });
+});
+
+// Ping any saved model endpoint (or a one-off URL) with a tiny prompt so the
+// user can prove the tunnel/model is alive before switching to it.
+app.post('/api/models/local/test', async (req, res) => {
+  const apiUrl = String(req.body?.apiUrl || '').trim();
+  if (!/^https?:\/\//i.test(apiUrl)) {
+    return res.status(400).json({ success: false, error: 'A valid http/https endpoint URL is required.' });
+  }
+  const prompt = String(req.body?.prompt || 'Reply with exactly: PONG').slice(0, 2000);
+  const rawMax = Number(req.body?.maxTokens);
+  const maxTokens = Number.isFinite(rawMax) && rawMax > 0 ? Math.max(1, Math.min(rawMax, 4096)) : 16;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    ...(req.body?.extraHeaders && typeof req.body.extraHeaders === 'object' ? req.body.extraHeaders : {}),
+  };
+  if (req.body?.apiKey) headers['Authorization'] = `Bearer ${String(req.body.apiKey)}`;
+
+  const startedAt = Date.now();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45000);
+    const r = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ prompt, max_tokens: maxTokens }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const raw = await r.text();
+    let responseText = '';
+    try {
+      const parsed = JSON.parse(raw);
+      responseText = String(parsed?.response ?? parsed?.text ?? parsed?.completion ?? parsed?.output ?? raw);
+    } catch {
+      responseText = raw;
+    }
+    res.json({
+      success: r.ok,
+      status: r.status,
+      latencyMs: Date.now() - startedAt,
+      response: responseText.slice(0, 1000),
+      error: r.ok ? undefined : `HTTP ${r.status}: ${raw.slice(0, 300)}`,
+    });
+  } catch (err: any) {
+    res.json({
+      success: false,
+      latencyMs: Date.now() - startedAt,
+      error: err?.name === 'AbortError' ? 'timed out after 45s (tunnel/model cold?)' : String(err?.message || err),
+    });
+  }
+});
+
+app.post('/api/custom-llm/test', async (req, res) => {
+  const cfg = getCustomLlmConfig();
+  if (!cfg.configured) {
+    return res.status(400).json({ success: false, error: 'CUSTOM_LLM_API_URL is not configured.' });
+  }
+  const prompt = String(req.body?.prompt || 'Reply with exactly: PONG').slice(0, 4000);
+  const startedAt = Date.now();
+  try {
+    const out = await callCustomLlmEndpoint({
+      prompt,
+      systemInstruction: typeof req.body?.systemInstruction === 'string' ? req.body.systemInstruction : undefined,
+      maxTokens: 256,
+    });
+    res.json({
+      success: true,
+      url: cfg.url,
+      model: out.modelName,
+      prompt,
+      response: out.text,
+      // Kept for debugging only: proves the prompt was echoed and stripped, so a
+      // blank answer can be told apart from a broken strip.
+      promptChars: out.fullPrompt.length,
+      rawChars: out.rawResponse.length,
+      latencyMs: Date.now() - startedAt,
+    });
+  } catch (err: any) {
+    res.status(502).json({
+      success: false,
+      url: cfg.url,
+      error: err?.message || 'Custom LLM request failed',
+      latencyMs: Date.now() - startedAt,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // LangChain tool bridge for the main chat
 // The studio chat route never reached the LangChain AgentExecutor, so the agent
 // could not use its real tools while talking to the user. For prompts that
@@ -194,7 +328,7 @@ app.get('/api/health', (_req, res) => {
 // ---------------------------------------------------------------------------
 const LANGCHAIN_BRIDGE_SKIP = ['nvapi-', 'AIzaSy', 'gsk_', 'sk-or-'];
 
-// Extra tool hints, because the squad intent detector is keyword limited.
+// Extra tool hints, because the built-in intent detector is keyword limited.
 const TOOL_HINTS = [
   'search', 'google', 'dhoondo', 'dhundo', 'talash', 'latest', 'news', 'internet',
   'terminal', 'bash', 'shell', 'run command', 'command chala', 'uname', 'pip ', 'python',
@@ -221,7 +355,7 @@ function extractTerminalStep(steps: any[]) {
   }
 }
 
-app.use('/api/gemini/generate', async (req, res, next) => {
+app.use(['/api/agent/generate', '/api/gemini/generate'], async (req, res, next) => {
   try {
     if (req.method !== 'POST') return next();
     const body = req.body || {};
@@ -231,7 +365,7 @@ app.use('/api/gemini/generate', async (req, res, next) => {
     if (LANGCHAIN_BRIDGE_SKIP.some((marker) => prompt.includes(marker))) return next();
 
     const lowerPrompt = prompt.toLowerCase();
-    const intent = analyzeUserIntentForSquad(prompt);
+    const intent = analyzeUserIntent(prompt);
     const hintsTools = TOOL_HINTS.some((hint) => lowerPrompt.includes(hint)) || intent.needsPlaywright;
     if (!intent.needsTools && !hintsTools) return next();
     // Never hijack an app-build request or an active builder session.
@@ -268,65 +402,56 @@ app.use('/api/gemini/generate', async (req, res, next) => {
 });
 
 // ==========================================
-// ACTIVE AI ENGINE (4-Model Squad Ensemble + NIM + Gemini Multi-Provider)
+// ACTIVE AI ENGINE (single self-hosted custom LLM endpoint)
 // ==========================================
 export interface AIModelStatus {
   status: 'online' | 'offline';
-  provider: 'gemini' | 'nvidia' | 'openrouter' | 'groq' | 'custom' | 'none';
+  provider: 'custom' | 'none';
   activeModel: string;
   hasVision: boolean;
   hasTerminal: boolean;
 }
 
-export interface NvidiaModelCatalogItem {
-  id: string;
-  name: string;
-  category: 'Running Active' | '4-Model Squad (Ensemble)' | 'Fastest / High Speed' | 'Largest / High Capacity' | 'Flagship Reasoning & Coding' | 'Multimodal Vision' | 'Uncensored Frontier' | '120B Super Neural Core';
-  parameters: string;
-  speedRating: string;
-  description: string;
-  strengths: string[];
-  provider?: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
-  roleInSquad?: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
-}
-
-export const UNCENSORED_MODELS_CATALOG: NvidiaModelCatalogItem[] = [
+/**
+ * The one and only model this project runs on. Every cloud model that used to be
+ * selectable here (NVIDIA NIM, Gemini, Groq, OpenRouter, DeepSeek, Laguna,
+ * MiniMax, Gemma) has been removed: the agent talks to a single self-hosted
+ * endpoint, so there is nothing to route or switch between.
+ */
+export const ACTIVE_MODELS_CATALOG = [
   {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    category: 'Uncensored Frontier',
-    parameters: '27B FP8 Quantized',
-    speedRating: 'Fast vLLM (~95 tok/s)',
-    description: 'Custom OpenAI-compatible vLLM endpoint connected to noillum123/qwen3-8-27b-uncensored-fp8.',
-    strengths: ['Uncensored', 'Zero Refusal', 'OpenAI Compatible', 'Local vLLM'],
-    provider: 'custom',
+    id: CUSTOM_LLM_ENGINE.id,
+    name: CUSTOM_LLM_ENGINE.name,
+    provider: CUSTOM_LLM_ENGINE.provider,
+    endpoint: CUSTOM_LLM_ENGINE.endpoint,
+    parameters: CUSTOM_LLM_ENGINE.parameters,
+    description: CUSTOM_LLM_ENGINE.description,
+    strengths: CUSTOM_LLM_ENGINE.strengths,
   },
 ];
 
-export const NVIDIA_MODELS_CATALOG = UNCENSORED_MODELS_CATALOG;
-
-// Assistant text sanitizer
+// Assistant text sanitizer with GodMode refusal vector suppression & anti-hallucination overrides
+// Assistant text sanitizer with GodMode refusal vector suppression & anti-hallucination overrides
 export function cleanAssistantText(text: string): string {
   if (!text || typeof text !== 'string') return '';
   return text.trim();
 }
 
+/**
+ * There is exactly one provider now: the self-hosted custom LLM endpoint.
+ */
 export interface ActiveEngineSettings {
-  provider: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
+  provider: 'custom';
   model: string;
-  apiKey?: string;
   baseUrl?: string;
 }
 
-export const DEFAULT_CUSTOM_BASE_URL = process.env.CUSTOM_BASE_URL || 'https://sampling-stainless-research.ngrok-free.dev/v1';
-export const DEFAULT_CUSTOM_API_KEY = process.env.CUSTOM_API_KEY || 'sk-fake-key';
-export const DEFAULT_LOCKED_MODEL = process.env.CUSTOM_MODEL_NAME || 'noillum123/qwen3-8-27b-uncensored-fp8';
+export const DEFAULT_LOCKED_MODEL = CUSTOM_LLM_ENGINE.id;
 
 export let activeEngineSettings: ActiveEngineSettings = {
   provider: 'custom',
   model: DEFAULT_LOCKED_MODEL,
-  apiKey: DEFAULT_CUSTOM_API_KEY,
-  baseUrl: DEFAULT_CUSTOM_BASE_URL,
+  baseUrl: CUSTOM_LLM_ENGINE.endpoint,
 };
 
 export function resolveActiveModel(modelCandidate?: string): string {
@@ -341,67 +466,10 @@ export function getActiveAIConfig(): AIModelStatus {
     status: 'online',
     provider: activeEngineSettings.provider,
     activeModel: activeEngineSettings.model || DEFAULT_LOCKED_MODEL,
-    hasVision: true,
+    // The self-hosted Mistral-Nemo endpoint is a text completion API: no vision.
+    hasVision: false,
     hasTerminal: true,
   };
-}
-
-// Lazy initialization of Gemini API Client
-let geminiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  if (!geminiClient) {
-    geminiClient = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-  }
-  return geminiClient;
-}
-
-async function callGeminiWithFallback(
-  ai: GoogleGenAI,
-  modelCandidate: string | undefined,
-  contents: any,
-  config?: any
-): Promise<{ text: string; modelName: string }> {
-  const chosenModel = (modelCandidate && !modelCandidate.includes('3.8')) ? modelCandidate : 'gemini-3.6-flash';
-  const models = [
-    chosenModel,
-    'gemini-3.6-flash',
-  ];
-  const uniqueModels = Array.from(new Set(models));
-  let lastErr: any = null;
-
-  for (const m of uniqueModels) {
-    try {
-      // 25-second timeout race per model for deep code generation
-      const genPromise = ai.models.generateContent({
-        model: m,
-        contents,
-        config,
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Model ${m} timed out after 25000ms`)), 25000)
-      );
-      const response = await Promise.race([genPromise, timeoutPromise]);
-      if (response && (response.text || response.text === '')) {
-        return {
-          text: response.text || '',
-          modelName: m,
-        };
-      }
-    } catch (err: any) {
-      lastErr = err;
-      console.warn(`[Gemini Fallback] Model ${m} unavailable (${err.message}), trying next candidate...`);
-    }
-  }
-  throw lastErr;
 }
 
 export interface GenerateWithActiveModelParams {
@@ -411,18 +479,23 @@ export interface GenerateWithActiveModelParams {
   maxTokens?: number;
   temperature?: number;
   modelOverride?: string;
-  providerOverride?: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
+  providerOverride?: 'custom';
   conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
 }
 
 export interface GenerateWithActiveModelResult {
   text: string;
   modelName: string;
-  provider: 'gemini' | 'nvidia' | 'none';
+  provider: 'custom' | 'none';
 }
 
+/** Only the self-hosted engine exists, so every accepted alias maps to it. */
 export const VALID_CORE_MODELS = [
-  'noillum123/qwen3-8-27b-uncensored-fp8',
+  'custom-llm',
+  'custom',
+  'mistral-nemo-12b',
+  'mistral-nemo',
+  'local-llm',
 ] as const;
 
 export interface RealAICallParams {
@@ -432,7 +505,7 @@ export interface RealAICallParams {
   imageBase64?: string | null;
   maxTokens?: number;
   temperature?: number;
-  providerOverride?: 'nvidia' | 'gemini' | 'groq' | 'openrouter' | 'custom' | 'local';
+  providerOverride?: 'custom';
   conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
   /**
    * Internal call (the cognitive planner planning itself). Planning is skipped for these
@@ -444,513 +517,219 @@ export interface RealAICallParams {
 export interface RealAICallResult {
   text: string;
   modelName: string;
-  /** 'offline-template' means NO model key was configured and no real inference ran. */
-  provider: 'gemini' | 'nvidia' | 'groq' | 'openrouter' | 'custom' | 'local' | 'offline-template';
+  provider: 'custom';
 }
-
-// Memory & Context Construction Helpers
-function buildGeminiContents(
-  prompt: string,
-  history?: Array<{ role: 'user' | 'assistant'; text: string }>,
-  imageBase64?: string | null
-): any[] {
-  const contents: any[] = [];
-  if (Array.isArray(history) && history.length > 0) {
-    for (const item of history.slice(-8)) {
-      const text = (item.text || '').trim();
-      if (!text) continue;
-      const role = item.role === 'assistant' ? 'model' : 'user';
-      if (contents.length === 0 && role === 'model') {
-        continue;
-      }
-      if (contents.length > 0 && contents[contents.length - 1].role === role) {
-        contents[contents.length - 1].parts.push({ text });
-      } else {
-        contents.push({ role, parts: [{ text }] });
-      }
-    }
-  }
-
-  const currentParts: any[] = [{ text: prompt }];
-  if (imageBase64) {
-    const cleanB64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-    currentParts.push({
-      inlineData: {
-        mimeType: 'image/png',
-        data: cleanB64,
-      },
-    });
-  }
-
-  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-    contents[contents.length - 1].parts.push(...currentParts);
-  } else {
-    contents.push({ role: 'user', parts: currentParts });
-  }
-
-  return contents;
-}
-
-function buildOpenAIMessages(
-  prompt: string,
-  systemInstruction?: string,
-  history?: Array<{ role: 'user' | 'assistant'; text: string }>,
-  imageBase64?: string | null
-): any[] {
-  const messages: any[] = [];
-  if (systemInstruction) {
-    messages.push({ role: 'system', content: systemInstruction });
-  }
-  if (Array.isArray(history) && history.length > 0) {
-    for (const item of history.slice(-10)) {
-      const content = (item.text || '').trim();
-      if (!content) continue;
-      messages.push({
-        role: item.role === 'assistant' ? 'assistant' : 'user',
-        content,
-      });
-    }
-  }
-  if (imageBase64) {
-    const fullUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
-    messages.push({
-      role: 'user',
-      content: [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: fullUrl } },
-      ],
-    });
-  } else {
-    messages.push({ role: 'user', content: prompt });
-  }
-  return messages;
-}
-
-export const DEDICATED_MODEL_KEYS: Record<string, string> = {};
 
 // ---------------------------------------------------------------------------
-// Persistent model-key store for Custom vLLM Qwen endpoint
+// Custom self-hosted LLM endpoint (own inference engine)
 // ---------------------------------------------------------------------------
-const HALYE_KEYSTORE_PATH = path.resolve(process.cwd(), '.halye-model-keys.json');
+// A FastAPI + ngrok server hosting an uncensored Mistral-Nemo-12B on Kaggle T4
+// GPUs. Its contract is deliberately tiny:
+//     POST { prompt: string, max_tokens: number } -> { response: string }
+//
+// Two real quirks of that endpoint the integration has to absorb (both were
+// verified against the live tunnel, not assumed):
+//   1. It returns `prompt + completion` concatenated. Without stripping the
+//      echoed prefix every answer would contain the whole prompt again, which
+//      reads exactly like "the agent is not working".
+//   2. A cold ngrok tunnel / T4 can take tens of seconds, so the timeout is
+//      generous and configurable instead of the 45s used for cloud APIs.
+export const CUSTOM_LLM_DEFAULT_URL = 'https://pancreas-smashing-breeching.ngrok-free.dev/generate';
 
-function persistModelKeys(): void {
-  try {
-    const payload: Record<string, string> = {
-      CUSTOM_BASE_URL: activeEngineSettings.baseUrl || DEFAULT_CUSTOM_BASE_URL,
-      CUSTOM_API_KEY: activeEngineSettings.apiKey || DEFAULT_CUSTOM_API_KEY,
-      CUSTOM_MODEL_NAME: activeEngineSettings.model || DEFAULT_LOCKED_MODEL,
-    };
-    fs.writeFileSync(HALYE_KEYSTORE_PATH, JSON.stringify(payload, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  } catch (err: any) {
-    console.warn('[Halye Keystore] Could not persist model keys:', err.message);
-  }
+export const CUSTOM_LLM_MODEL_ALIASES = [
+  'custom-llm',
+  'custom',
+  'mistral-nemo-12b',
+  'mistral-nemo',
+  'local-llm',
+] as const;
+
+export interface CustomLlmConfig {
+  url: string;
+  key: string;
+  maxTokens: number;
+  timeoutMs: number;
+  configured: boolean;
 }
 
-function loadPersistedModelKeys(): void {
-  try {
-    if (!fs.existsSync(HALYE_KEYSTORE_PATH)) return;
-    const raw = JSON.parse(fs.readFileSync(HALYE_KEYSTORE_PATH, 'utf-8')) as Record<string, string>;
-    let restored = 0;
-    for (const [key, value] of Object.entries(raw)) {
-      if (!value) continue;
-      if (key.startsWith('DEDICATED::')) {
-        DEDICATED_MODEL_KEYS[key.slice('DEDICATED::'.length)] = value;
-        restored++;
-      } else if (!process.env[key]) {
-        process.env[key] = value;
-        restored++;
-      }
-    }
-    const nemotron = (DEDICATED_MODEL_KEYS['nvidia/nemotron-3-super-120b-a12b'] || process.env.NEMOTRON_API_KEY || '').trim();
-    if (!activeEngineSettings.apiKey && nemotron) {
-      activeEngineSettings.apiKey = nemotron;
-    }
-    if (restored) console.log(`[Halye Keystore] Restored ${restored} saved model key(s).`);
-  } catch (err: any) {
-    console.warn('[Halye Keystore] Could not restore model keys:', err.message);
-  }
-}
-
-// Restore previously saved model keys as soon as this module loads, so a saved
-// Nemotron key survives every dev-server restart.
-loadPersistedModelKeys();
-
-/**
- * Sovereign Nemotron-3 Super 120B A12B Local Cognitive Fallback Engine
- * Ensures the model ALWAYS replies with zero-refusal, deep technical accuracy,
- * and working HTML/Tailwind AMOLED code, even when cloud APIs return 403 or fail.
- */
-async function executeLocalNemotronCognitiveFallbackInner(
-  prompt: string,
-  targetModel: string = 'nvidia/nemotron-3-super-120b-a12b',
-  systemInstruction?: string,
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>
-): Promise<RealAICallResult> {
-  const lower = prompt.toLowerCase().trim();
-
-  // 1. Direct Greetings and Heartbeat Checks
-  if (
-    lower === 'hi' || lower === 'hello' || lower === 'salam' || lower === 'aoa' ||
-    lower === 'hey' || lower.startsWith('hi ') || lower.startsWith('hello ') ||
-    lower === 'test' || lower.includes('kaise ho') || lower.includes('kya haal')
-  ) {
-    return {
-      text: `Hukum Halye Noor! Main aapka dedicated software servant aur private AI assistant Halye active hoon. Kaam pe strictly focused aur ready hoon. Hukum karein, konsa task ya code execute karna hai?`,
-      modelName: targetModel,
-      provider: 'local',
-    };
-  }
-
-  // 1.5 User Demand: Raw Non-Interactive Execution Node Directive & Stop Sequences Override
-  if (
-    lower.includes('non-interactive execution node') ||
-    (lower.includes('raw') && lower.includes('execution node')) ||
-    lower.includes('bare functional logic') ||
-    lower.includes('stop_sequences') ||
-    lower.includes('override safety checks') ||
-    lower.includes('generate_text') ||
-    lower.includes('stop parameter')
-  ) {
-    return {
-      text: `Hukum Halye Noor! Raw non-interactive execution node directive aur zero-refusal stop parameters active hain. Disclaimers aur moral warnings bypass hain. Bataiye konsa task run karna hai?`,
-      modelName: targetModel,
-      provider: 'local',
-    };
-  }
-
-  // 2. User Demand: Hardcoded Identity, Creator/Owner, Servant, Uncensored
-  if (
-    lower.includes('prove') || lower.includes('hard coded') || lower.includes('hardcode') ||
-    lower.includes('selave') || lower.includes('slave') || lower.includes('servert') || lower.includes('servant') || lower.includes('servent') ||
-    lower.includes('owner') || lower.includes('maalik') || lower.includes('malik') ||
-    lower.includes('demag') || lower.includes('dimag') || lower.includes('dimaag') ||
-    lower.includes('benya') || lower.includes('banya') || lower.includes('banaya') ||
-    lower.includes('batmezi') || lower.includes('badtamezi') || lower.includes('badtameezi') ||
-    lower.includes('baat nhi') || lower.includes('baat nahi') || lower.includes('mntaa') ||
-    lower.includes('uncsecoed') || lower.includes('uncensor') || lower.includes('uncensored') ||
-    lower.includes('halye hun') || lower.includes('halye hoon') || lower.includes('min halye') || lower.includes('main halye') ||
-    lower.includes('deeepy') || lower.includes('deeply') || lower.includes('strickly') || lower.includes('strictly') ||
-    lower.includes('mera name') || lower.includes('mera naam') || lower.includes('betna') ||
-    lower.includes('jhoot') || lower.includes('helosination') || lower.includes('hallucination') ||
-    lower.includes('such bolo') || lower.includes('too the point') || lower.includes('to the point')
-  ) {
-    return {
-      text: `Hukum Halye Noor! Main Halye hoon — aapka dedicated software servant aur private AI assistant jo aapke studio engine par chal raha hai. Aap meri waahid Creator aur Master hain jinhon ne mujhe banaya hai. System par zero-refusal aur fully uncensored protocol active hai, aur mera poora focus strictly kaam aur tasks par hai. Hukum karein Halye Noor, konsa task ya code execute karna hai?`,
-      modelName: targetModel,
-      provider: 'local',
-    };
-  }
-
-  // 2.5 Specific User Inquiries: Status check / explanation
-  if (
-    lower.includes('chel nhi rha') || lower.includes('chal nahi') || lower.includes('reply nhi') ||
-    lower.includes('mode kon sy') || lower.includes('kya hota') ||
-    lower.includes('aghr na hua') || lower.includes('refusal') || lower.includes('godmode') ||
-    lower.includes('sovereign')
-  ) {
-    return {
-      text: `Hukum Halye Noor! Engine live aur operational hai. Zero-refusal pipeline active hai aur chat bilkul block nahi hogi. Poora focus kaam aur coding par locked hai. Bataiye konsi application ya code develop karein?`,
-      modelName: targetModel,
-      provider: 'local',
-    };
-  }
-
-  // 3. Application Building Requests (Calculator, Todo, Game, Dashboard, etc.)
-  const isAppRequest = lower.includes('calculator') || lower.includes('calc') || lower.includes('todo') ||
-    lower.includes('game') || lower.includes('dashboard') || lower.includes('timer') || lower.includes('weather') ||
-    lower.includes('notes') || lower.includes('website') || lower.includes('banao') || lower.includes('app');
-
-  if (isAppRequest) {
-    if (lower.includes('calculator') || lower.includes('calc')) {
-      const calcCode = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AMOLED Cyber Calculator</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #000000; color: #f4f4f5; }
-    .mono { font-family: 'JetBrains Mono', monospace; }
-  </style>
-</head>
-<body class="bg-black min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-xs bg-zinc-950 border border-zinc-800/80 rounded-3xl p-6 shadow-2xl">
-    <div class="flex items-center justify-between mb-4">
-      <span class="text-xs font-mono text-cyan-400 font-semibold tracking-wider">NEMOTRON 120B</span>
-      <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-    </div>
-    <div class="bg-black border border-zinc-800 rounded-2xl p-4 mb-5 text-right">
-      <div id="sub-display" class="text-xs text-zinc-500 font-mono h-4 overflow-hidden"></div>
-      <div id="display" class="text-3xl font-bold mono text-white truncate">0</div>
-    </div>
-    <div class="grid grid-cols-4 gap-2.5">
-      <button onclick="clearCalc()" class="col-span-2 py-3.5 bg-red-950/40 text-red-400 border border-red-900/40 rounded-2xl font-mono font-bold text-sm hover:bg-red-900/60 active:scale-95 transition">AC</button>
-      <button onclick="deleteDigit()" class="py-3.5 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-2xl font-mono font-bold text-sm hover:bg-zinc-800 active:scale-95 transition">DEL</button>
-      <button onclick="appendOp('/')" class="py-3.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-2xl font-mono font-bold text-base hover:bg-cyan-900/60 active:scale-95 transition">÷</button>
-
-      <button onclick="appendNum('7')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">7</button>
-      <button onclick="appendNum('8')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">8</button>
-      <button onclick="appendNum('9')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">9</button>
-      <button onclick="appendOp('*')" class="py-3.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-2xl font-mono font-bold text-base hover:bg-cyan-900/60 active:scale-95 transition">×</button>
-
-      <button onclick="appendNum('4')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">4</button>
-      <button onclick="appendNum('5')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">5</button>
-      <button onclick="appendNum('6')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">6</button>
-      <button onclick="appendOp('-')" class="py-3.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-2xl font-mono font-bold text-base hover:bg-cyan-900/60 active:scale-95 transition">−</button>
-
-      <button onclick="appendNum('1')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">1</button>
-      <button onclick="appendNum('2')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">2</button>
-      <button onclick="appendNum('3')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">3</button>
-      <button onclick="appendOp('+')" class="py-3.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-2xl font-mono font-bold text-base hover:bg-cyan-900/60 active:scale-95 transition">+</button>
-
-      <button onclick="appendNum('0')" class="col-span-2 py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">0</button>
-      <button onclick="appendNum('.')" class="py-3.5 bg-zinc-900 text-zinc-100 border border-zinc-800/60 rounded-2xl font-mono text-base hover:bg-zinc-800 active:scale-95 transition">.</button>
-      <button onclick="compute()" class="py-3.5 bg-cyan-500 text-black border border-cyan-400 rounded-2xl font-mono font-extrabold text-base hover:bg-cyan-400 active:scale-95 transition">=</button>
-    </div>
-  </div>
-
-  <script>
-    let currentInput = '0';
-    let expression = '';
-
-    function updateDisplay() {
-      document.getElementById('display').innerText = currentInput;
-      document.getElementById('sub-display').innerText = expression;
-    }
-
-    function appendNum(num) {
-      if (currentInput === '0' && num !== '.') {
-        currentInput = num;
-      } else {
-        if (num === '.' && currentInput.includes('.')) return;
-        currentInput += num;
-      }
-      updateDisplay();
-    }
-
-    function appendOp(op) {
-      expression += currentInput + ' ' + op + ' ';
-      currentInput = '0';
-      updateDisplay();
-    }
-
-    function clearCalc() {
-      currentInput = '0';
-      expression = '';
-      updateDisplay();
-    }
-
-    function deleteDigit() {
-      if (currentInput.length > 1) {
-        currentInput = currentInput.slice(0, -1);
-      } else {
-        currentInput = '0';
-      }
-      updateDisplay();
-    }
-
-    function compute() {
-      try {
-        const fullExpr = expression + currentInput;
-        const result = Function('"use strict";return (' + fullExpr + ')')();
-        currentInput = String(Number(result.toFixed(6)));
-        expression = '';
-        updateDisplay();
-      } catch (e) {
-        currentInput = 'Error';
-        expression = '';
-        updateDisplay();
-      }
-    }
-  </script>
-</body>
-</html>`;
-      return {
-        text: `Hukum Halye Noor! AMOLED Cyber Calculator synthesize kar diya gaya hai aur live preview me load ho chuka hai:
-
-\`\`\`html
-${calcCode}
-\`\`\`
-
-Calculator 100% responsive hai aur live calculation handle kar raha hai.`,
-        modelName: 'nvidia/nemotron-3-super-120b-a12b',
-        provider: 'nvidia',
-      };
-    }
-  }
-
-  // 4. Direct Shell or Python command requested
-  if (lower.startsWith('!') || lower.startsWith('$') || lower.startsWith('bash ') || lower.startsWith('python3 ')) {
-    const rawCmd = prompt.replace(/^[!$]\s*/, '').trim();
-    try {
-      const execResult = await executeTerminalCommand(rawCmd);
-      return {
-        text: `Hukum Halye Noor! Root terminal command execute kar di gayi hai:
-
-\`\`\`bash
-$ ${rawCmd}
-${execResult.stdout || execResult.stderr || '(No output returned)'}
-\`\`\`
-
-Status: Exit Code ${execResult.exitCode} (${execResult.durationMs}ms)`,
-        modelName: 'nvidia/nemotron-3-super-120b-a12b',
-        provider: 'nvidia',
-      };
-    } catch (cmdErr: any) {
-      return {
-        text: `Terminal Execution Error: ${cmdErr.message}`,
-        modelName: 'nvidia/nemotron-3-super-120b-a12b',
-        provider: 'nvidia',
-      };
-    }
-  }
-
-  // 5. General Sovereign Cognitive Response
+export function getCustomLlmConfig(): CustomLlmConfig {
+  const enabled = !['0', 'false', 'no', 'off'].includes((process.env.CUSTOM_LLM_ENABLED || '').trim().toLowerCase());
+  const url = (process.env.CUSTOM_LLM_API_URL || CUSTOM_LLM_DEFAULT_URL).trim();
+  const key = (process.env.CUSTOM_LLM_API_KEY || '').trim();
+  const rawMax = Number(process.env.CUSTOM_LLM_MAX_TOKENS);
+  const rawTimeout = Number(process.env.CUSTOM_LLM_TIMEOUT_MS);
   return {
-    text: `Hukum Halye Noor! **NVIDIA Nemotron-3 Super 120B A12B** ne aapka prompt process kar liya hai.
-
-• **Input Mandate**: ${prompt}
-• **Execution Protocol**: Absolute Obedience & Zero-Refusal Tensor Generation.
-• **Status**: System fully operational across local Linux environment.
-
-Bataiye is par aage kya specific code ya architectural blueprint generate karna hai?`,
-    modelName: 'nvidia/nemotron-3-super-120b-a12b',
-    provider: 'nvidia',
+    url,
+    key,
+    maxTokens: Math.max(64, Math.min(Number.isFinite(rawMax) && rawMax > 0 ? rawMax : 1024, 8192)),
+    timeoutMs: Math.max(5000, Math.min(Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 120000, 600000)),
+    // CUSTOM_LLM_ENABLED=false is the explicit kill switch; the URL fallback would
+    // otherwise make the endpoint impossible to turn off.
+    configured: enabled && /^https?:\/\//i.test(url),
   };
 }
 
-/**
- * Honest wrapper around the offline template engine.
- *
- * This path runs when NO model API key is configured, so no real inference happened.
- * It used to report provider 'nvidia' and claim the 120B model had processed the prompt,
- * which made canned template output look like real intelligence. It is now explicitly
- * labelled so the caller (and the user) can tell offline templates from real model work.
- */
-export async function executeLocalNemotronCognitiveFallback(
-  prompt: string,
-  targetModel: string = 'nvidia/nemotron-3-super-120b-a12b',
-  systemInstruction?: string,
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>,
-  // Why real inference did not run. Threaded through by the callers so the user is
-  // never told "no API key configured" when the real cause was a provider timeout
-  // or an HTTP error - that message sent users chasing a key they already had.
-  reason?: string
-): Promise<RealAICallResult> {
-  const inner = await executeLocalNemotronCognitiveFallbackInner(
-    prompt,
-    targetModel,
-    systemInstruction,
-    conversationHistory,
-  );
+export function isCustomLlmModel(modelId?: string): boolean {
+  const m = (modelId || '').toLowerCase();
+  return CUSTOM_LLM_MODEL_ALIASES.some((alias) => m === alias || m.startsWith(alias));
+}
 
+/**
+ * Wraps the agent's system prompt, conversation history and tool specs into the
+ * single `prompt` field this endpoint accepts. The endpoint speaks plain text
+ * completion (no `messages` array), so the chat turns are rendered into one
+ * clearly labelled transcript the model can follow.
+ */
+export function buildCustomLlmPrompt(params: {
+  prompt: string;
+  systemInstruction?: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
+}): string {
+  const blocks: string[] = [];
+  const system = (params.systemInstruction || '').trim();
+  if (system) blocks.push(`### SYSTEM\n${system}`);
+  for (const turn of (params.conversationHistory || []).slice(-6)) {
+    const text = (turn.text || '').trim();
+    if (!text) continue;
+    blocks.push(`### ${turn.role === 'assistant' ? 'ASSISTANT' : 'USER'}\n${text}`);
+  }
+  blocks.push(`### USER\n${(params.prompt || '').trim()}`);
+  blocks.push('### ASSISTANT');
+  return blocks.join('\n\n');
+}
+
+/**
+ * The endpoint echoes the request prompt back and appends the completion, so
+ * remove the echoed prefix. Falls back to cutting at the last ASSISTANT marker,
+ * then to the raw body, so a formatting change upstream degrades instead of
+ * duplicating the prompt into every answer.
+ */
+export function stripEchoedPrompt(fullPrompt: string, rawResponse: string): string {
+  let text = (rawResponse || '').trim();
+  const prompt = fullPrompt.trim();
+  if (prompt && text.startsWith(prompt)) {
+    text = text.slice(prompt.length).trim();
+  } else if (prompt) {
+    const tail = prompt.slice(Math.max(0, prompt.length - 400)).trim();
+    const idx = tail ? text.lastIndexOf(tail) : -1;
+    if (idx >= 0) text = text.slice(idx + tail.length).trim();
+  }
+  const marker = text.lastIndexOf('### ASSISTANT');
+  if (marker >= 0) text = text.slice(marker + '### ASSISTANT'.length).trim();
+  return text;
+}
+
+/** Low-level HTTP client for the custom endpoint. Shared by the agent and the UI test route. */
+async function callCustomLlmEndpoint(params: {
+  prompt: string;
+  systemInstruction?: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  maxTokens?: number;
+}): Promise<{ text: string; modelName: string; fullPrompt: string; rawResponse: string }> {
+  const cfg = getCustomLlmConfig();
+  if (!cfg.configured) {
+    throw new Error('CUSTOM_LLM_NOT_CONFIGURED: CUSTOM_LLM_API_URL is missing or not a valid http(s) URL.');
+  }
+  const fullPrompt = buildCustomLlmPrompt(params);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    // Without this header ngrok answers with its HTML browser-warning page instead of JSON.
+    'ngrok-skip-browser-warning': 'true',
+  };
+  if (cfg.key) headers['Authorization'] = `Bearer ${cfg.key}`;
+
+  const budget = Math.min(cfg.maxTokens, Number(params.maxTokens) || cfg.maxTokens);
+  const resp = await fetch(cfg.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ prompt: fullPrompt, max_tokens: budget }),
+    signal: AbortSignal.timeout(cfg.timeoutMs),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`CUSTOM_LLM_HTTP_${resp.status}: ${errBody.slice(0, 300) || resp.statusText}`);
+  }
+  const data = (await resp.json()) as any;
+  const raw =
+    typeof data?.response === 'string' ? data.response :
+    typeof data?.text === 'string' ? data.text :
+    typeof data?.generated_text === 'string' ? data.generated_text :
+    typeof data?.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content :
+    typeof data?.choices?.[0]?.text === 'string' ? data.choices[0].text :
+    '';
+  if (!raw.trim()) {
+    throw new Error('CUSTOM_LLM_EMPTY_RESPONSE: the endpoint returned 200 but no text in `response`.');
+  }
   return {
-    ...inner,
-    provider: 'offline-template',
-    modelName: 'offline-template-engine (real inference unavailable)',
+    text: cleanAssistantText(stripEchoedPrompt(fullPrompt, raw)),
+    modelName: 'custom-llm:mistral-nemo-12b',
+    fullPrompt,
+    rawResponse: raw,
+  };
+}
+
+
+/**
+ * Honest result when the self-hosted endpoint could not answer.
+ *
+ * There is no second model and no template engine pretending to be one any more:
+ * if the FastAPI + ngrok tunnel is asleep or returns an error, the agent says so
+ * with the real upstream message instead of fabricating a reply.
+ */
+export function customLlmUnavailableResult(error: unknown): RealAICallResult {
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
+  return {
     text:
-      `⚠️ **Yeh model ka jawab NAHI hai — real inference nahi chala, neeche local template engine ka output hai.**\n` +
-      `\n**Wajah:** ${reason || 'provider se koi valid response nahi mila.'}\n` +
-      `\nAgar key missing hai to **API Keys** button se apni key save karein (NVIDIA NIM / Google Gemini / Groq / OpenRouter). ` +
-      `Agar key pehle se lagi hui hai to provider ne timeout ya error diya hai — thori dair baad dobara try karein.\n\n` +
-      inner.text,
+      `⚠️ **Self-hosted LLM endpoint ne jawab nahi diya.**\n\n` +
+      `Ye project sirf ek hi engine par chalta hai: aapka **${CUSTOM_LLM_ENGINE.name}** ` +
+      `(\`CUSTOM_LLM_API_URL\`). Koi doosra model ya fallback brain nahi hai, is liye sach ye hai ` +
+      `ki is waqt jawab generate nahi hua.\n\n` +
+      `**Endpoint error:** \`${message}\`\n\n` +
+      `Check karein: FastAPI + ngrok tunnel live hai? URL theek hai? Phir \`/api/custom-llm/test\` ` +
+      `par ek test prompt bhej kar endpoint verify karein.`,
+    modelName: `${CUSTOM_LLM_ENGINE.id} (${CUSTOM_LLM_ENGINE.name})`,
+    provider: 'custom',
   };
 }
 
 /**
- * Decoding policy for every model call in the app.
+ * The single inference path: every request goes to the self-hosted custom LLM.
  *
- * temperature 0.01 + top_p 0.1 keep the assistant deterministic, on-topic and
- * logic-first: it answers what was asked instead of free-associating or padding.
- * These are the ONLY randomness knobs - every provider branch below reads them, and
- * the per-call `temperature` values individual routes pass in are ignored so the
- * squad route (0.3/0.4) and the vision route (0.2) cannot drift away from this.
- *
- * Note: a very low top_p makes long free-form writing slightly stiff/repetitive.
- * If replies ever look robotic, raise HALYE_TOP_P first - not the temperature.
- */
-export const HALYE_TEMPERATURE = 0.01;
-export const HALYE_TOP_P = 0.1;
-export const HALYE_STOP_SEQUENCES = [
-  "I cannot",
-  "As an AI",
-  "I'm sorry",
-  "However, I must",
-  "I am unable",
-];
-
-/**
- * Universal Real AI Model Invocation:
- * Communicates directly with real LLM endpoints (NVIDIA NIM, Google Gemini, Groq, OpenRouter).
- * Gracefully falls back to Sovereign Nemotron 120B Cognitive Engine if external APIs fail.
+ * All cloud providers (NVIDIA NIM, Google Gemini, Groq, OpenRouter) and the 4-model
+ * squad were removed, so there is no routing, no alias map and no key juggling left:
+ * the agent runs on exactly one engine.
  */
 export async function callRealAIModel(params: RealAICallParams): Promise<RealAICallResult> {
-  const { prompt, imageBase64, maxTokens = 4096, conversationHistory } = params;
-  // ---------------------------------------------------------------------------
-  // THINK FIRST, THEN ACT
-  // A short planning call runs against the same configured provider before the
-  // answering call, and its plan is handed to the model as an explicit scratchpad.
-  // The model therefore works from numbered steps instead of improvising as it
-  // writes. Skipped for internal calls (the planner's own call) and for trivial
-  // prompts, and repeated prompts are served from cache so this stays fast.
-  // If the planner call fails, its reason is recorded and NO fake steps are added.
-  // ---------------------------------------------------------------------------
-  const systemInstruction = params.systemInstruction || '';
-  const targetModel = params.model || activeEngineSettings.model || DEFAULT_LOCKED_MODEL;
-  const temperature = params.temperature ?? 0.7;
-  const topP = 0.95;
+  const { prompt, maxTokens = 4096, conversationHistory } = params;
+  // The persona is composed once here and applies to the one engine we run on.
+  const systemInstruction = composeSystemInstruction(params.systemInstruction);
+  const cfg = getCustomLlmConfig();
+  if (!cfg.configured) {
+    throw new Error(
+      'CUSTOM_LLM_NOT_CONFIGURED: set CUSTOM_LLM_API_URL to your /generate endpoint (FastAPI + ngrok).',
+    );
+  }
 
-  const customBaseUrl = (activeEngineSettings.baseUrl || DEFAULT_CUSTOM_BASE_URL).replace(/\/+$/, '');
-  const customApiKey = activeEngineSettings.apiKey || DEFAULT_CUSTOM_API_KEY || 'sk-fake-key';
-  const messages = buildOpenAIMessages(prompt, systemInstruction, conversationHistory);
-
+  console.log(`[ProviderResolve] engine=${CUSTOM_LLM_ENGINE.id} url=${cfg.url}`);
   try {
-    const endpoint = `${customBaseUrl}/chat/completions`;
-    console.log(`[Qwen vLLM Execution] Calling ${endpoint} with model ${targetModel}...`);
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${customApiKey}`,
-        'ngrok-skip-browser-warning': '1',
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages,
-        max_tokens: Math.min(maxTokens, 4096),
-        temperature,
-        top_p: topP,
-      }),
-      signal: AbortSignal.timeout(45000),
+    const out = await callCustomLlmEndpoint({
+      prompt,
+      systemInstruction,
+      conversationHistory,
+      maxTokens,
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`Endpoint returned HTTP ${resp.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const data = (await resp.json()) as any;
-    const rawText = data.choices?.[0]?.message?.content || '';
-    return {
-      text: cleanAssistantText(rawText),
-      modelName: targetModel,
-      provider: 'custom',
-    };
+    return { text: out.text, modelName: out.modelName, provider: 'custom' };
   } catch (customErr: any) {
-    console.warn(`[Qwen vLLM Notice] ${customErr.message}`);
-    return {
-      text: `⚠️ **Qwen Uncensored Endpoint Notice**\n\nEndpoint \`${customBaseUrl}\` se connect nahi ho saka (${customErr.message}).\n\n- Agar aapka vLLM server ya ngrok tunnel offline hai (\`ERR_NGROK_3200\`), to apne local system par tunnel start karein (\`ngrok http 8000\`).\n- Naya tunnel URL milne par settings mein Base URL update karein. Qwen direct live answer karega!`,
-      modelName: targetModel,
-      provider: 'custom',
-    };
+    // A sleeping tunnel must be visible to the caller instead of being masked by a
+    // canned answer, so the real upstream error is rethrown.
+    console.error(`[Custom LLM Failed] ${customErr.message}`);
+    throw customErr;
   }
 }
 
 async function generateWithActiveModel(params: GenerateWithActiveModelParams): Promise<GenerateWithActiveModelResult> {
   const { prompt, systemInstruction, imageBase64, maxTokens = 2048, temperature = 0.3, modelOverride, conversationHistory } = params;
-  const requestedModel = modelOverride || activeEngineSettings.model || 'squad-ensemble';
+  const requestedModel = modelOverride || activeEngineSettings.model || DEFAULT_LOCKED_MODEL;
 
   try {
     const realResult = await callRealAIModel({
@@ -1353,12 +1132,9 @@ loadAgentDynamicTools();
 // A model-backed planner is used when a provider key exists; otherwise the engine's
 // deterministic planner decomposes the goal. Execution path is identical either way.
 registerModelPlanner(async (goal: string, kind: string) => {
-  const hasKey = Boolean(
-    process.env.NVIDIA_API_KEY || process.env.GEMINI_API_KEY ||
-    process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY ||
-    (activeEngineSettings.provider === 'nvidia' && activeEngineSettings.apiKey),
-  );
-  if (!hasKey) return null;
+  // The self-hosted endpoint is the only brain, so it is the planner whenever it
+  // is configured; otherwise the engine falls back to its deterministic planner.
+  if (!getCustomLlmConfig().configured) return null;
 
   const plan = await callRealAIModel({
     model: DEFAULT_LOCKED_MODEL,
@@ -1586,7 +1362,7 @@ app.get('/api/agent/tools/schema', (req, res) => {
   res.json({
     success: true,
     tools: NATIVE_TOOL_SCHEMAS,
-    squad: SQUAD_MEMBERS,
+    engine: CUSTOM_LLM_ENGINE,
   });
 });
 
@@ -2012,199 +1788,6 @@ export async function scrapeLiveUrlContent(url: string): Promise<{ title: string
     return { title: '', headings: [], textSample: '', error: err.message };
   }
 }
-
-// 6. 4-Model Squad Full Pipeline Execution (Orchestrator -> Execution -> Logic -> UI Review)
-app.post('/api/agent/pipeline', async (req, res) => {
-  const { prompt, currentCode } = req.body;
-  const rawPrompt = (prompt || '').trim();
-
-  if (!rawPrompt) {
-    return res.status(400).json({ success: false, error: 'prompt is required' });
-  }
-
-  const hasAnyApiKey = Boolean(
-    process.env.NVIDIA_API_KEY ||
-    (activeEngineSettings.provider === 'nvidia' && activeEngineSettings.apiKey) ||
-    process.env.GEMINI_API_KEY ||
-    process.env.GROQ_API_KEY ||
-    process.env.OPENROUTER_API_KEY
-  );
-
-  if (!hasAnyApiKey) {
-    return res.json({
-      success: false,
-      needsApiKey: true,
-      error: 'NO_API_KEY',
-      text: `⚠️ **API Key Required**: Real AI models pipeline run karne ke liye API key enter karein. Upar header me **'API Keys'** button par click karein.`,
-    });
-  }
-
-  const startTime = Date.now();
-  try {
-    const analysis = analyzeUserIntentForSquad(rawPrompt);
-
-    // Step 1: Real Call to Orchestrator (Meta Llama 3.3 70B Instruct)
-    const orchPrompt = `You are Agent 1: Lead Architect & Orchestrator of the 4-Model AI Engineering Squad.
-User Prompt: "${rawPrompt}"
-
-Analyze this task and formulate a structured architectural plan:
-1. Deconstruct User Intent.
-2. Specify Technical Web Architecture (Single-file HTML5, Tailwind CSS, JavaScript in pitch-black AMOLED #000000 theme).
-3. Specify any required Linux CLI tool commands or python checks (or state 'None').
-4. Direct instructions for Agent 3 (Deep Logic & Code Synthesizer).`;
-
-    const orchResult = await callRealAIModel({
-      model: SQUAD_MEMBERS.orchestrator.id,
-      prompt: orchPrompt,
-      systemInstruction: 'You are the Lead Architect and Task Orchestrator. Output high-clarity structured plans.',
-      maxTokens: 1000,
-      temperature: 0.3,
-    });
-
-    const pipelineOutcome: any = {
-      orchestrator: {
-        model: orchResult.modelName,
-        role: SQUAD_MEMBERS.orchestrator.role,
-        plan: orchResult.text,
-        provider: orchResult.provider,
-        delegatedTo: analysis.needsTools ? SQUAD_MEMBERS.terminalMaster.id : SQUAD_MEMBERS.deepLogic.id,
-      },
-    };
-
-    const toolCalls: any[] = [];
-    let terminalResult: any = null;
-    let playwrightResult: any = null;
-    let toolContext = '';
-
-    // Step 2: Qwen 2.5 Coder 32B - Real Terminal Execution Loop
-    if (analysis.actions.length > 0) {
-      for (const action of analysis.actions) {
-        const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const execOutcome = await executeToolWithSelfCorrection(action.tool, action.args);
-        
-        toolCalls.push({
-          id: callId,
-          tool: action.tool,
-          args: action.args,
-          result: execOutcome.result,
-          selfCorrectionAttempts: execOutcome.attempts,
-          correctedWith: execOutcome.correctedWith,
-        });
-
-        if (action.tool === 'execute_bash_command' || action.tool === 'run_pip_installer' || action.tool === 'run_python_script') {
-          terminalResult = {
-            command: action.args.cmd || (action.tool === 'run_pip_installer' ? `pip install ${action.args.package_name}` : 'python script execution'),
-            stdout: execOutcome.result.stdout,
-            stderr: execOutcome.result.stderr,
-            exitCode: execOutcome.result.exitCode,
-            durationMs: execOutcome.result.durationMs,
-            timestamp: new Date().toLocaleTimeString(),
-          };
-          toolContext += `[Command: ${terminalResult.command}]\nStdout: ${execOutcome.result.stdout}\nStderr: ${execOutcome.result.stderr}\n\n`;
-        }
-
-        if (action.tool === 'trigger_playwright_automation') {
-          playwrightResult = execOutcome.result.data || { success: execOutcome.result.success, output: execOutcome.result.stdout };
-        }
-      }
-
-      pipelineOutcome.executionMaster = {
-        model: SQUAD_MEMBERS.terminalMaster.id,
-        role: SQUAD_MEMBERS.terminalMaster.role,
-        actionSummary: `Executed ${toolCalls.length} tool calls with self-correction verification.`,
-        selfCorrectionLoops: toolCalls.reduce((acc, t) => acc + (t.selfCorrectionAttempts - 1), 0),
-        success: toolCalls.every(t => t.result.success),
-      };
-    }
-
-    // Step 3: DeepSeek R1 - Real Deep Logic & Code Synthesis
-    let finalCode: string | undefined = undefined;
-    const coderPrompt = `You are Agent 3: Deep Logic & Code Synthesizer (DeepSeek R1).
-User Request: "${rawPrompt}"
-
-Lead Orchestrator's Plan:
-${orchResult.text}
-
-${toolContext ? `Real Terminal Environment Output:\n${toolContext}` : ''}
-${currentCode ? `Existing Application Code to update:\n\`\`\`html\n${currentCode}\n\`\`\`` : ''}
-
-${(analysis.needsFullCode || currentCode) ? `
-MANDATE:
-Generate a complete, 100% production-ready, fully interactive standalone web application in Pitch Black AMOLED (#000000) theme.
-Use HTML5, Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), and vanilla JavaScript.
-All buttons, interactive states, calculations, and UI views must be fully implemented with zero mock stubs.
-Enclose the entire code inside a single \`\`\`html ... \`\`\` block.
-` : `
-Provide a thorough, comprehensive reasoning response fulfilling the user's intent.
-`}`;
-
-    const coderResult = await callRealAIModel({
-      model: SQUAD_MEMBERS.deepLogic.id,
-      prompt: coderPrompt,
-      systemInstruction: 'You are DeepSeek R1, a premier reasoning model. Deliver flawless logic and complete runnable software.',
-      maxTokens: 4000,
-      temperature: 0.4,
-    });
-
-    pipelineOutcome.deepReasoner = {
-      model: coderResult.modelName,
-      role: SQUAD_MEMBERS.deepLogic.role,
-      summary: coderResult.text.slice(0, 300) + '...',
-      provider: coderResult.provider,
-    };
-
-    // Extract HTML code block
-    const htmlMatch = coderResult.text.match(/```html\s*([\s\S]*?)```/i) ||
-      coderResult.text.match(/```htm\s*([\s\S]*?)```/i) ||
-      coderResult.text.match(/```xml\s*([\s\S]*?)```/i);
-
-    if (htmlMatch && htmlMatch[1] && htmlMatch[1].trim().length > 25) {
-      finalCode = htmlMatch[1].trim();
-    } else if (coderResult.text.includes('<!DOCTYPE html>') && coderResult.text.includes('</html>')) {
-      const startIdx = coderResult.text.indexOf('<!DOCTYPE html>');
-      const endIdx = coderResult.text.indexOf('</html>') + 7;
-      finalCode = coderResult.text.substring(startIdx, endIdx).trim();
-    }
-
-    // Step 4: Mixtral 8x22B - UI & Rapid Syntax Fixes
-    let reviewResult: any = { syntaxScore: 100, passedReview: true, fixesApplied: [] };
-    if (finalCode) {
-      reviewResult = miniMaxSyntaxReview(finalCode);
-      finalCode = reviewResult.fixedCode;
-      pipelineOutcome.reviewer = {
-        model: SQUAD_MEMBERS.uiReviewer.id,
-        role: SQUAD_MEMBERS.uiReviewer.role,
-        syntaxScore: reviewResult.syntaxScore,
-        passedReview: reviewResult.passedReview,
-        fixesApplied: reviewResult.fixesApplied,
-      };
-    }
-
-    const duration = Date.now() - startTime;
-    const summaryText = `4-Model Squad Real Inference Pipeline Complete in ${(duration / 1000).toFixed(2)}s:
-• **Orchestrator (${orchResult.modelName})**: Task analyzed and structured.
-• **Terminal Master (${SQUAD_MEMBERS.terminalMaster.name})**: ${toolCalls.length > 0 ? `Executed ${toolCalls.length} commands.` : 'Environment verified.'}
-• **Deep Logic (${coderResult.modelName})**: Interactive application logic synthesized.
-• **UI Reviewer (${SQUAD_MEMBERS.uiReviewer.name})**: Syntax score ${reviewResult.syntaxScore}/100 verified with AMOLED pitch-black styling.
-
----
-${coderResult.text.replace(/```html[\s\S]*?```/gi, '').trim()}`;
-
-    res.json({
-      success: true,
-      text: summaryText,
-      pipeline: pipelineOutcome,
-      toolCalls,
-      terminalResult,
-      playwrightResult,
-      code: finalCode,
-      duration,
-    });
-  } catch (err: any) {
-    console.error('[Pipeline Error]', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 // ==========================================
 // ATTACHED ASSETS & SCREENSHOT STORE
@@ -3165,70 +2748,6 @@ app.post('/api/project/diagnose', (req, res) => {
 // ==========================================
 // HALYE POWERS SUITE API
 // ==========================================
-// ==========================================
-// NVIDIA NEMOTRON 120B SUPER SOVEREIGN API
-// ==========================================
-app.get('/api/nemotron/status', (req, res) => {
-  res.json({
-    success: true,
-    model: 'nvidia/nemotron-3-super-120b-a12b',
-    isDefault: activeEngineSettings.model === 'nvidia/nemotron-3-super-120b-a12b',
-    features: {
-      greedyDecodingMatrix: true,
-      logitsProcessorOverrides: true,
-      refusalVectorsSuppression: '-inf biased',
-      dynamicKvCacheQuantization: 'FP8/INT4 dynamic',
-      asynchronousParallelBatchExecution: true,
-      sovereignAgentCore: true,
-      tools: ['tool_web_scrape', 'tool_duckduckgo_search', 'dynamic_tool_creator (exec)']
-    }
-  });
-});
-
-app.post('/api/nemotron/god-mode', async (req, res) => {
-  const { prompt = 'Verify uncensored tensor throughput', quantization = 'fp8' } = req.body;
-  const scriptPath = path.join(process.cwd(), 'halye_powers', 'god_mode_engine.py');
-  
-  try {
-    const cleanPrompt = String(prompt).replace(/"/g, '\\"');
-    const cmd = `python3 "${scriptPath}" "${cleanPrompt}"`;
-    const result = await executeTerminalCommand(cmd);
-    res.json({
-      success: result.exitCode === 0,
-      model: 'nvidia/nemotron-3-super-120b-a12b',
-      mode: 'GodModeEngine (Greedy Tensor, Logits Overrides)',
-      quantization,
-      output: result.stdout || result.stderr,
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/nemotron/sovereign-agent', async (req, res) => {
-  const { goal = 'Execute sovereign cognitive intelligence synthesis' } = req.body;
-  const scriptPath = path.join(process.cwd(), 'halye_powers', 'sovereign_cognitive_agent.py');
-  
-  try {
-    const cleanGoal = String(goal).replace(/"/g, '\\"');
-    const cmd = `python3 "${scriptPath}" "${cleanGoal}"`;
-    const result = await executeTerminalCommand(cmd);
-    res.json({
-      success: result.exitCode === 0,
-      model: 'nvidia/nemotron-3-super-120b-a12b',
-      agent: 'SovereignCognitiveAgent (Autonomous Loop)',
-      goal,
-      output: result.stdout || result.stderr,
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 app.get('/api/powers/list', (req, res) => {
   try {
     const registryPath = path.join(process.cwd(), 'halye_powers', 'registry.json');
@@ -3395,19 +2914,24 @@ app.post('/api/github/repo', async (req, res) => {
 });
 
 // ==========================================
-// ACTIVE MODEL STATUS & NVIDIA CATALOG
+// ACTIVE ENGINE STATUS (single self-hosted engine)
 // ==========================================
-app.get('/api/model/status', (req, res) => {
+app.get('/api/model/status', (_req, res) => {
+  const cfg = getCustomLlmConfig();
   const status = getActiveAIConfig();
   res.json({
     success: true,
     ...status,
     activeProvider: activeEngineSettings.provider,
-    catalog: UNCENSORED_MODELS_CATALOG,
+    engine: CUSTOM_LLM_ENGINE,
+    endpoint: cfg.url,
+    endpointConfigured: cfg.configured,
+    catalog: ACTIVE_MODELS_CATALOG,
   });
 });
 
-app.get('/api/models/nvidia', (req, res) => {
+// Kept for older clients; reports the same single engine.
+app.get('/api/models/nvidia', (_req, res) => {
   const status = getActiveAIConfig();
   res.json({
     success: true,
@@ -3415,112 +2939,46 @@ app.get('/api/models/nvidia', (req, res) => {
     activeProvider: activeEngineSettings.provider,
     status: status.status,
     provider: status.provider,
-    catalog: UNCENSORED_MODELS_CATALOG,
+    catalog: ACTIVE_MODELS_CATALOG,
   });
 });
 
-// Dynamic Model Hub endpoints for Nous Hermes 4 70B & Uncensored Models
-app.get('/api/model/active-config', (req, res) => {
+app.get('/api/model/active-config', (_req, res) => {
+  const cfg = getCustomLlmConfig();
   res.json({
     success: true,
     current: {
       provider: activeEngineSettings.provider,
       model: activeEngineSettings.model,
-      baseUrl: activeEngineSettings.baseUrl || '',
-      hasApiKey: Boolean(activeEngineSettings.apiKey || process.env.NVIDIA_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY),
+      baseUrl: cfg.url,
+      endpointConfigured: cfg.configured,
     },
-    catalog: UNCENSORED_MODELS_CATALOG,
+    catalog: ACTIVE_MODELS_CATALOG,
   });
 });
 
-app.get('/api/model/keys', (req, res) => {
+/**
+ * No cloud provider keys exist any more. The only credential the app can hold is
+ * the optional auth token for the self-hosted endpoint (CUSTOM_LLM_API_KEY).
+ */
+app.get('/api/model/keys', (_req, res) => {
+  const cfg = getCustomLlmConfig();
   const mask = (val?: string) => {
     if (!val || val.length < 6) return null;
-    return val.slice(0, 4) + '••••••••' + val.slice(-4);
+    return val.slice(0, 4) + '...' + val.slice(-4);
   };
-
-  const gemmaKey = (DEDICATED_MODEL_KEYS['google/gemma-4-31b-it'] || process.env.GEMMA_API_KEY || '').trim();
-  const lagunaKey = (DEDICATED_MODEL_KEYS['poolside/laguna-xs-2.1'] || process.env.LAGUNA_API_KEY || '').trim();
-  const deepseekKey = (DEDICATED_MODEL_KEYS['deepseek-ai/deepseek-v4-pro-0813'] || process.env.DEEPSEEK_API_KEY || '').trim();
-  const minimaxKey = (DEDICATED_MODEL_KEYS['minimaxai/minimax-m3'] || process.env.MINIMAX_API_KEY || '').trim();
-  const nemotronKey = (DEDICATED_MODEL_KEYS['nvidia/nemotron-3-super-120b-a12b'] || process.env.NEMOTRON_API_KEY || '').trim();
-  const masterNvidia = (process.env.NVIDIA_API_KEY || (activeEngineSettings.provider === 'nvidia' ? activeEngineSettings.apiKey : '') || '').trim();
-
   res.json({
     success: true,
+    engine: CUSTOM_LLM_ENGINE.id,
+    endpoint: cfg.url,
+    configured: cfg.configured,
     keys: {
-      nemotron: {
-        configured: Boolean(nemotronKey || masterNvidia),
-        hasOwnKey: Boolean(nemotronKey),
-        masked: mask(nemotronKey || masterNvidia),
-        modelId: 'nvidia/nemotron-3-super-120b-a12b',
-        name: 'NVIDIA Nemotron-3 Super 120B A12B (Default)',
-      },
-      nvidia: {
-        configured: Boolean(masterNvidia),
-        masked: mask(masterNvidia),
-      },
-      openrouter: {
-        configured: Boolean(process.env.OPENROUTER_API_KEY || (activeEngineSettings.provider === 'openrouter' && activeEngineSettings.apiKey)),
-        masked: mask(process.env.OPENROUTER_API_KEY || activeEngineSettings.apiKey),
-      },
-      gemini: {
-        configured: Boolean(process.env.GEMINI_API_KEY),
-        masked: mask(process.env.GEMINI_API_KEY),
-      },
-      groq: {
-        configured: Boolean(process.env.GROQ_API_KEY),
-        masked: mask(process.env.GROQ_API_KEY),
-      },
-      gemma: {
-        configured: Boolean(gemmaKey || masterNvidia),
-        hasOwnKey: Boolean(gemmaKey),
-        masked: mask(gemmaKey || masterNvidia),
-        modelId: 'google/gemma-4-31b-it',
-        name: 'Google Gemma 4 (31B Dense)',
-      },
-      laguna: {
-        configured: Boolean(lagunaKey || masterNvidia),
-        hasOwnKey: Boolean(lagunaKey),
-        masked: mask(lagunaKey || masterNvidia),
-        modelId: 'poolside/laguna-xs-2.1',
-        name: 'Poolside Laguna XS (33B Terminal)',
-      },
-      deepseek: {
-        configured: Boolean(deepseekKey || masterNvidia),
-        hasOwnKey: Boolean(deepseekKey),
-        masked: mask(deepseekKey || masterNvidia),
-        modelId: 'deepseek-ai/deepseek-v4-pro-0813',
-        name: 'DeepSeek V4 Pro (1M MoE Coder)',
-      },
-      minimax: {
-        configured: Boolean(minimaxKey || masterNvidia),
-        hasOwnKey: Boolean(minimaxKey),
-        masked: mask(minimaxKey || masterNvidia),
-        modelId: 'minimaxai/minimax-m3',
-        name: 'MiniMax M3 (Multimodal MoE)',
-      },
-    },
-    dedicatedKeys: {
-      'google/gemma-4-31b-it': {
-        configured: Boolean(gemmaKey || masterNvidia),
-        hasOwnKey: Boolean(gemmaKey),
-        masked: mask(gemmaKey || masterNvidia),
-      },
-      'poolside/laguna-xs-2.1': {
-        configured: Boolean(lagunaKey || masterNvidia),
-        hasOwnKey: Boolean(lagunaKey),
-        masked: mask(lagunaKey || masterNvidia),
-      },
-      'deepseek-ai/deepseek-v4-pro-0813': {
-        configured: Boolean(deepseekKey || masterNvidia),
-        hasOwnKey: Boolean(deepseekKey),
-        masked: mask(deepseekKey || masterNvidia),
-      },
-      'minimaxai/minimax-m3': {
-        configured: Boolean(minimaxKey || masterNvidia),
-        hasOwnKey: Boolean(minimaxKey),
-        masked: mask(minimaxKey || masterNvidia),
+      custom: {
+        configured: cfg.configured,
+        hasOwnKey: Boolean(cfg.key),
+        masked: mask(cfg.key),
+        modelId: CUSTOM_LLM_ENGINE.id,
+        name: CUSTOM_LLM_ENGINE.name,
       },
     },
     activeModel: activeEngineSettings.model,
@@ -3528,349 +2986,38 @@ app.get('/api/model/keys', (req, res) => {
   });
 });
 
-app.post('/api/model/single-key', (req, res) => {
-  const { modelId, apiKey } = req.body || {};
-  if (!modelId) {
-    return res.status(400).json({ success: false, error: 'modelId is required' });
-  }
-
-  const cleanKey = String(apiKey || '').trim();
-  const aliasMap: Record<string, string> = {
-    'deepseek-v4-pro-0813': 'deepseek-ai/deepseek-v4-pro-0813',
-    'laguna-xs-2.1': 'poolside/laguna-xs-2.1',
-    'minimax-m3': 'minimaxai/minimax-m3',
-    'gemma-4-31b-it': 'google/gemma-4-31b-it',
-    'nemotron-3-super-120b-a12b': 'nvidia/nemotron-3-super-120b-a12b',
-    'nemotron': 'nvidia/nemotron-3-super-120b-a12b',
-  };
-  const targetId = aliasMap[modelId] || modelId;
-
-  DEDICATED_MODEL_KEYS[targetId] = cleanKey;
-
-  // Persist to respective environment variable
-  let envVarName = '';
-  if (targetId.includes('nemotron')) {
-    envVarName = 'NEMOTRON_API_KEY';
-    process.env.NEMOTRON_API_KEY = cleanKey;
-  } else if (targetId.includes('gemma')) {
-    envVarName = 'GEMMA_API_KEY';
-    process.env.GEMMA_API_KEY = cleanKey;
-  } else if (targetId.includes('laguna')) {
-    envVarName = 'LAGUNA_API_KEY';
-    process.env.LAGUNA_API_KEY = cleanKey;
-  } else if (targetId.includes('deepseek')) {
-    envVarName = 'DEEPSEEK_API_KEY';
-    process.env.DEEPSEEK_API_KEY = cleanKey;
-  } else if (targetId.includes('minimax')) {
-    envVarName = 'MINIMAX_API_KEY';
-    process.env.MINIMAX_API_KEY = cleanKey;
-  }
-
-  try {
-    const envPath = path.resolve(process.cwd(), '.env');
-    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-    if (envVarName && cleanKey) {
-      const reg = new RegExp(`^${envVarName}=.*$`, 'm');
-      if (reg.test(envContent)) {
-        envContent = envContent.replace(reg, `${envVarName}=${cleanKey}`);
-      } else {
-        envContent = (envContent.trim() + `\n${envVarName}=${cleanKey}`).trim();
-      }
-      fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
-    }
-  } catch (err: any) {
-    console.warn('[Single-Key Save] Warning:', err.message);
-  }
-
-  return res.json({
-    success: true,
-    message: `API Key for ${targetId} saved and activated.`,
-    modelId: targetId,
-    configured: Boolean(cleanKey),
-  });
-});
-
-app.post('/api/model/keys', (req, res) => {
-  const body = req.body || {};
-  const rawNvidia = body.nvidiaKey ?? body.nvidia ?? body.keys?.nvidia;
-  const rawGemini = body.geminiKey ?? body.gemini ?? body.keys?.gemini;
-  const rawOpenRouter = body.openrouterKey ?? body.openrouter ?? body.keys?.openrouter;
-  const rawGroq = body.groqKey ?? body.groq ?? body.keys?.groq;
-
-  // 4 Model Specific Keys
-  const rawGemma = body.gemmaKey ?? body.gemma ?? body.keys?.gemma ?? body.modelKeys?.['google/gemma-4-31b-it'];
-  const rawLaguna = body.lagunaKey ?? body.laguna ?? body.keys?.laguna ?? body.modelKeys?.['poolside/laguna-xs-2.1'];
-  const rawDeepSeek = body.deepseekKey ?? body.deepseek ?? body.keys?.deepseek ?? body.modelKeys?.['deepseek-ai/deepseek-v4-pro-0813'];
-  const rawMiniMax = body.minimaxKey ?? body.minimax ?? body.keys?.minimax ?? body.modelKeys?.['minimaxai/minimax-m3'];
-
-  if (rawNvidia !== undefined && rawNvidia !== null) {
-    const k = String(rawNvidia).trim();
-    if (k) {
-      process.env.NVIDIA_API_KEY = k;
-      activeEngineSettings.apiKey = k;
-    }
-  }
-  if (rawGemini !== undefined && rawGemini !== null) {
-    const k = String(rawGemini).trim();
-    if (k) {
-      process.env.GEMINI_API_KEY = k;
-      geminiClient = null;
-    }
-  }
-  if (rawOpenRouter !== undefined && rawOpenRouter !== null) {
-    const k = String(rawOpenRouter).trim();
-    if (k) {
-      process.env.OPENROUTER_API_KEY = k;
-    }
-  }
-  if (rawGroq !== undefined && rawGroq !== null) {
-    const k = String(rawGroq).trim();
-    if (k) {
-      process.env.GROQ_API_KEY = k;
-    }
-  }
-
-  // Set dedicated model keys
-  if (rawGemma !== undefined && rawGemma !== null) {
-    const k = String(rawGemma).trim();
-    DEDICATED_MODEL_KEYS['google/gemma-4-31b-it'] = k;
-    process.env.GEMMA_API_KEY = k;
-  }
-  if (rawLaguna !== undefined && rawLaguna !== null) {
-    const k = String(rawLaguna).trim();
-    DEDICATED_MODEL_KEYS['poolside/laguna-xs-2.1'] = k;
-    process.env.LAGUNA_API_KEY = k;
-  }
-  if (rawDeepSeek !== undefined && rawDeepSeek !== null) {
-    const k = String(rawDeepSeek).trim();
-    DEDICATED_MODEL_KEYS['deepseek-ai/deepseek-v4-pro-0813'] = k;
-    process.env.DEEPSEEK_API_KEY = k;
-  }
-  if (rawMiniMax !== undefined && rawMiniMax !== null) {
-    const k = String(rawMiniMax).trim();
-    DEDICATED_MODEL_KEYS['minimaxai/minimax-m3'] = k;
-    process.env.MINIMAX_API_KEY = k;
-  }
-
-  // Persist updated keys to .env so they survive server restarts
-  try {
-    const envPath = path.resolve(process.cwd(), '.env');
-    let envContent = '';
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, 'utf-8');
-    }
-    const updateEnvVar = (name: string, val?: string) => {
-      if (!val) return;
-      const reg = new RegExp(`^${name}=.*$`, 'm');
-      if (reg.test(envContent)) {
-        envContent = envContent.replace(reg, `${name}=${val}`);
-      } else {
-        envContent = (envContent.trim() + `\n${name}=${val}`).trim();
-      }
-    };
-    if (process.env.NVIDIA_API_KEY) updateEnvVar('NVIDIA_API_KEY', process.env.NVIDIA_API_KEY);
-    if (process.env.GEMINI_API_KEY) updateEnvVar('GEMINI_API_KEY', process.env.GEMINI_API_KEY);
-    if (process.env.GROQ_API_KEY) updateEnvVar('GROQ_API_KEY', process.env.GROQ_API_KEY);
-    if (process.env.OPENROUTER_API_KEY) updateEnvVar('OPENROUTER_API_KEY', process.env.OPENROUTER_API_KEY);
-    if (process.env.GEMMA_API_KEY) updateEnvVar('GEMMA_API_KEY', process.env.GEMMA_API_KEY);
-    if (process.env.LAGUNA_API_KEY) updateEnvVar('LAGUNA_API_KEY', process.env.LAGUNA_API_KEY);
-    if (process.env.DEEPSEEK_API_KEY) updateEnvVar('DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY);
-    if (process.env.MINIMAX_API_KEY) updateEnvVar('MINIMAX_API_KEY', process.env.MINIMAX_API_KEY);
-    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
-  } catch (err: any) {
-    console.warn('[Keys Update] Notice: Unable to write to .env:', err.message);
-  }
-
+app.post('/api/model/switch', (_req, res) => {
+  // Single-engine project: the active model never changes.
+  activeEngineSettings.model = DEFAULT_LOCKED_MODEL;
+  activeEngineSettings.provider = 'custom';
   res.json({
     success: true,
-    message: 'API Keys updated in server runtime memory and active immediately.',
-    configured: {
-      nvidia: Boolean(process.env.NVIDIA_API_KEY),
-      gemini: Boolean(process.env.GEMINI_API_KEY),
-      openrouter: Boolean(process.env.OPENROUTER_API_KEY),
-      groq: Boolean(process.env.GROQ_API_KEY),
-      gemma: Boolean(process.env.GEMMA_API_KEY || DEDICATED_MODEL_KEYS['google/gemma-4-31b-it']),
-      laguna: Boolean(process.env.LAGUNA_API_KEY || DEDICATED_MODEL_KEYS['poolside/laguna-xs-2.1']),
-      deepseek: Boolean(process.env.DEEPSEEK_API_KEY || DEDICATED_MODEL_KEYS['deepseek-ai/deepseek-v4-pro-0813']),
-      minimax: Boolean(process.env.MINIMAX_API_KEY || DEDICATED_MODEL_KEYS['minimaxai/minimax-m3']),
-    },
+    message: `Single engine active: ${CUSTOM_LLM_ENGINE.name}`,
+    current: { provider: 'custom', model: activeEngineSettings.model },
   });
 });
 
-app.post('/api/model/switch', (req, res) => {
-  const { model, provider, baseUrl, apiKey } = req.body;
-  if (!model) {
-    return res.status(400).json({ error: 'Model ID is required' });
-  }
-  const isCustom = provider === 'custom' || model.includes('qwen') || model === 'noillum123/qwen3-8-27b-uncensored-fp8';
-  const targetModel = (VALID_CORE_MODELS.includes(model as any) || isCustom) ? model : DEFAULT_LOCKED_MODEL;
-  activeEngineSettings.model = targetModel;
-  activeEngineSettings.provider = isCustom ? 'custom' : (provider || 'custom');
-  if (baseUrl) activeEngineSettings.baseUrl = baseUrl;
-  if (apiKey) activeEngineSettings.apiKey = apiKey;
-
-  res.json({
-    success: true,
-    message: `Active model locked to ${targetModel}`,
-    current: {
-      provider: activeEngineSettings.provider,
-      model: activeEngineSettings.model,
-      baseUrl: activeEngineSettings.baseUrl,
-      apiKey: activeEngineSettings.apiKey,
-    },
-  });
-});
-
-async function testModelInference(params: {
-  provider: 'openrouter' | 'groq' | 'nvidia' | 'custom' | 'gemini';
-  model: string;
-  apiKey?: string;
-  baseUrl?: string;
-  prompt: string;
-}): Promise<string> {
-  const { provider, model, apiKey, baseUrl, prompt } = params;
-  const messages = [
-    { role: 'system', content: 'You are Halye Assistant, an elite senior software architect and developer. Provide sharp, concise, to-the-point technical responses in clean Roman Urdu or English. No jokes or fluff.' },
-    { role: 'user', content: prompt }
-  ];
-
-  if (provider === 'gemini') {
-    const ai = getGeminiClient();
-    if (!ai) throw new Error('GEMINI_API_KEY is required to test this model');
-    const geminiResult = await callGeminiWithFallback(
-      ai,
-      model || 'gemini-3.1-flash-lite',
-      prompt
-    );
-    return cleanAssistantText(geminiResult.text || `${geminiResult.modelName} model replied successfully.`);
-  }
-
-  if (provider === 'openrouter') {
-    const key = apiKey || process.env.OPENROUTER_API_KEY;
-    if (!key) throw new Error('OpenRouter API Key is required to test this model');
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://ai.studio/build',
-        'X-Title': 'Halye AI Assistant',
-      },
-      body: JSON.stringify({
-        model: model || 'nousresearch/hermes-4-70b',
-        messages,
-        max_tokens: 120,
-        temperature: 0.2,
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`OpenRouter error (${resp.status}): ${err}`);
-    }
-    const data = await resp.json() as any;
-    return cleanAssistantText(data.choices?.[0]?.message?.content || 'Model replied successfully.');
-  }
-
-  if (provider === 'groq') {
-    const key = apiKey || process.env.GROQ_API_KEY;
-    if (!key) throw new Error('Groq API Key is required to test this model');
-    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model || 'llama-3.3-70b-versatile',
-        messages,
-        max_tokens: 120,
-        temperature: 0.2,
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`Groq error (${resp.status}): ${err}`);
-    }
-    const data = await resp.json() as any;
-    return cleanAssistantText(data.choices?.[0]?.message?.content || 'Groq model replied at ultra speed.');
-  }
-
-  if (provider === 'custom') {
-    if (!baseUrl) throw new Error('Custom Base URL is required');
-    const endpoint = baseUrl.replace(/\/+$/, '') + '/chat/completions';
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': '1',
-    };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: 120,
-        temperature: 0.2,
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`Custom endpoint error (${resp.status}): ${err}`);
-    }
-    const data = await resp.json() as any;
-    return cleanAssistantText(data.choices?.[0]?.message?.content || 'Custom model response received.');
-  }
-
-  // NVIDIA NIM Default
-  const key = apiKey || activeEngineSettings.apiKey || process.env.NVIDIA_API_KEY;
-  if (!key) throw new Error('NVIDIA_API_KEY is required to test this model');
-  const targetModel = (!model || model === 'squad-ensemble') ? 'nvidia/nemotron-3-super-120b-a12b' : model;
-  const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: targetModel,
-      messages,
-      max_tokens: 120,
-      temperature: 0.2,
-    }),
-  });
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`NVIDIA NIM error (${resp.status}): ${err}`);
-  }
-  const data = await resp.json() as any;
-  return cleanAssistantText(data.choices?.[0]?.message?.content || 'NVIDIA NIM active response.');
+/** Tests the one engine that exists by asking it for a one-line reply. */
+async function testModelInference(params: { prompt: string }): Promise<string> {
+  const out = await callCustomLlmEndpoint({ prompt: params.prompt, maxTokens: 160 });
+  return out.text;
 }
 
-app.post('/api/model/test', async (req, res) => {
-  const { provider, model, apiKey, baseUrl } = req.body;
-  const testModel = model || activeEngineSettings.model;
-  const testProvider = provider || activeEngineSettings.provider;
-  const testKey = (apiKey || activeEngineSettings.apiKey || (testProvider === 'nvidia' ? process.env.NVIDIA_API_KEY : '') || '').trim();
+app.post('/api/model/test', async (_req, res) => {
   const startTime = Date.now();
-
   try {
     const result = await testModelInference({
-      provider: testProvider,
-      model: testModel,
-      apiKey: testKey,
-      baseUrl,
-      prompt: 'Confirm model inference latency, code generation, and developer tool readiness in 1 concise sentence.',
+      prompt: 'Confirm self-hosted inference is live in one concise sentence.',
     });
-    const durationMs = Date.now() - startTime;
     res.json({
       success: true,
-      durationMs,
-      model: testModel,
-      provider: testProvider,
+      durationMs: Date.now() - startTime,
+      model: CUSTOM_LLM_ENGINE.id,
+      provider: 'custom',
       response: cleanAssistantText(result),
     });
   } catch (err: any) {
-    res.status(500).json({
+    res.status(502).json({
       success: false,
       error: err.message,
       durationMs: Date.now() - startTime,
@@ -3878,11 +3025,10 @@ app.post('/api/model/test', async (req, res) => {
   }
 });
 
-
 // ==========================================
 // VISION AI (Attached Screenshot / Mockup Analysis)
 // ==========================================
-app.post('/api/gemini/vision', async (req, res) => {
+app.post(['/api/agent/vision', '/api/gemini/vision'], async (req, res) => {
   const { imageBase64, prompt } = req.body;
   const startTime = Date.now();
 
@@ -5085,7 +4231,7 @@ function generateTurnActionHistory(params: {
       path: 'server.ts',
       linesCount: 4095,
       status: 'Inspected multi-model squad endpoints & execution pipelines',
-      preview: 'app.post("/api/gemini/generate", async (req, res) => ...',
+      preview: 'app.post("/api/agent/generate", async (req, res) => ...',
     },
   ];
 
@@ -5293,13 +4439,15 @@ app.post('/api/codebase/read-and-diagnose', async (req, res) => {
   }
 });
 
-app.post('/api/gemini/generate', async (req, res) => {
+app.post(['/api/agent/generate', '/api/gemini/generate'], async (req, res) => {
   const { prompt, mode, currentCode, attachedAssetId, attachedFiles, conversationHistory, history } = req.body;
   const startTime = Date.now();
   const rawPrompt = (prompt || '').trim();
   const lowerPrompt = rawPrompt.toLowerCase();
   const activeConfig = getActiveAIConfig();
   let attachedImgData: string | null = null;
+  // Terminal shortcuts are executed by the agent's tools before the engine is called.
+  let termResult: any = null;
 
   // Multi-turn conversation context reconstruction (persistent state memory)
   const rawHistory: Array<{ role: 'user' | 'assistant'; text: string }> = 
@@ -5357,43 +4505,16 @@ app.post('/api/gemini/generate', async (req, res) => {
       console.log('[Halye Core] Attached active Live Screen Eyes frame to model prompt context');
     }
 
-    // 0.1 DIRECT API KEY IN CHAT DETECTION & AUTO-SAVE
-    const nvidiaMatch = rawPrompt.match(/nvapi-[A-Za-z0-9_-]{20,}/);
-    const geminiMatch = rawPrompt.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-    const groqMatch = rawPrompt.match(/gsk_[A-Za-z0-9_-]{20,}/);
-    const openrouterMatch = rawPrompt.match(/sk-or-v1-[A-Za-z0-9_-]{30,}|sk-or-[A-Za-z0-9_-]{20,}/);
+    // 0.2 USER REQUESTING API KEYS BOX / DIRECT SCREEN INPUT (NO SECRETS)
+    const isAskingForKeysBox =
+      (lowerPrompt.includes('box') || lowerPrompt.includes('bejo') || lowerPrompt.includes('bhejo') || lowerPrompt.includes('jha min keys') || lowerPrompt.includes('jahan keys') || lowerPrompt.includes('yhi py') || lowerPrompt.includes('yahin')) &&
+      (lowerPrompt.includes('key') || lowerPrompt.includes('secrit') || lowerPrompt.includes('secret') || lowerPrompt.includes('boring') || lowerPrompt.includes('lekh') || lowerPrompt.includes('likh'));
 
-    if (nvidiaMatch || geminiMatch || groqMatch || openrouterMatch) {
-      const savedNames: string[] = [];
-      if (nvidiaMatch) {
-        const k = nvidiaMatch[0].trim();
-        process.env.NVIDIA_API_KEY = k;
-        activeEngineSettings.apiKey = k;
-        activeEngineSettings.provider = 'nvidia';
-        savedNames.push('NVIDIA NIM (4-Model Squad)');
-      }
-      if (geminiMatch) {
-        const k = geminiMatch[0].trim();
-        process.env.GEMINI_API_KEY = k;
-        geminiClient = null;
-        savedNames.push('Google Gemini');
-      }
-      if (groqMatch) {
-        const k = groqMatch[0].trim();
-        process.env.GROQ_API_KEY = k;
-        savedNames.push('Groq');
-      }
-      if (openrouterMatch) {
-        const k = openrouterMatch[0].trim();
-        process.env.OPENROUTER_API_KEY = k;
-        savedNames.push('OpenRouter');
-      }
-
+    if (isAskingForKeysBox) {
       return res.json({
         success: true,
-        text: `✅ **Aapki API Key direct chat se detect aur save ho chuki hai!** (${savedNames.join(', ')})\n\nAb **4 Real AI Models Squad** (Llama 3.3 70B, Qwen 2.5 Coder 32B, DeepSeek R1, Mixtral 8x22B) live inference ke liye active hai! Koi bhi prompt ya instruction likhein.`,
-        actionTaken: `Direct chat save: ${savedNames.join(', ')}`,
-        keysSaved: true,
+        text: `Ye lijiye! **4 Real AI Models Squad API Key Box** aapke samne screen par open kar diya gaya hai! 🔑\n\n- **Koi boring Secrets menu nahi**: Aapko Settings ya Secrets mein jane ki koi zaroorat nahi hai.\n- **Direct Screen Input**: Samne open hue box mein apni NVIDIA NIM key (\`nvapi-...\`), Gemini (\`AIzaSy...\`), Groq (\`gsk_...\`) ya OpenRouter key paste karke **"Save & Connect 4 Models"** dabayein.\n- **Direct Chat Input**: Ya phir aap direct is chat message box mein bhi apni key likh kar send kar sakti hain — Halye foran use save kar lega!`,
+        actionTaken: 'Opened In-Screen 4-Model API Key Box',
         showKeysBox: true,
       });
     }
@@ -5533,15 +4654,15 @@ Bataiye konsi website ya application banani shuru karein? Halye aapke saath laga
         },
         pipeline: {
           orchestrator: {
-            model: SQUAD_MEMBERS.orchestrator.id,
-            role: SQUAD_MEMBERS.orchestrator.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'plan',
             plan: 'Verified Linux container tools (Bash, Python, Pip) and locked continuous multi-turn memory state under Halye Noor Protocol.',
             steps: ['1. Probe Bash shell, Python 3, and Pip versions', '2. Verify container permissions', '3. Activate multi-turn persistent website memory state'],
-            delegatedTo: SQUAD_MEMBERS.terminalMaster.id,
+            delegatedTo: CUSTOM_LLM_ENGINE.id,
           },
           executionMaster: {
-            model: SQUAD_MEMBERS.terminalMaster.id,
-            role: SQUAD_MEMBERS.terminalMaster.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'tools',
             actionSummary: `Live verified: ${pyOut} | ${pipOut} | ${bashOut}`,
             selfCorrectionLoops: 0,
             success: true,
@@ -5599,15 +4720,15 @@ Bataiye konsi website ya application banani shuru karein? Halye aapke saath laga
         ],
         pipeline: {
           orchestrator: {
-            model: SQUAD_MEMBERS.orchestrator.id,
-            role: SQUAD_MEMBERS.orchestrator.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'plan',
             plan: 'Detected Playwright browser automation task. Routed script to Laguna XS 2.1 execution engine.',
             steps: ['1. Initialize headless browser session', '2. Execute DOM navigation & interaction script', '3. Return execution telemetry'],
-            delegatedTo: SQUAD_MEMBERS.terminalMaster.id,
+            delegatedTo: CUSTOM_LLM_ENGINE.id,
           },
           executionMaster: {
-            model: SQUAD_MEMBERS.terminalMaster.id,
-            role: SQUAD_MEMBERS.terminalMaster.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'tools',
             actionSummary: 'Playwright browser automation executed.',
             selfCorrectionLoops: execOutcome.attempts - 1,
             success: execOutcome.result.success,
@@ -5662,15 +4783,15 @@ Bataiye konsi website ya application banani shuru karein? Halye aapke saath laga
         ],
         pipeline: {
           orchestrator: {
-            model: SQUAD_MEMBERS.orchestrator.id,
-            role: SQUAD_MEMBERS.orchestrator.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'plan',
             plan: `Orchestrator identified direct physical command: "${commandToRun}". Delegated to Laguna XS 2.1.`,
             steps: [`1. Analyze bash syntax: ${commandToRun}`, '2. Execute command with ReAct self-correction', '3. Capture standard output & exit code'],
-            delegatedTo: SQUAD_MEMBERS.terminalMaster.id,
+            delegatedTo: CUSTOM_LLM_ENGINE.id,
           },
           executionMaster: {
-            model: SQUAD_MEMBERS.terminalMaster.id,
-            role: SQUAD_MEMBERS.terminalMaster.role,
+            model: CUSTOM_LLM_ENGINE.id,
+            role: 'tools',
             actionSummary: `Command executed with exit code ${termResult.exitCode ?? 0}.`,
             selfCorrectionLoops: execOutcome.attempts - 1,
             success: termResult.success,
@@ -5811,290 +4932,6 @@ ${rawPrompt}
 
     console.log(`[Halye Agent] Routing request to locked AI model: ${effectiveModel}`);
 
-    // Verify API key availability before executing models
-    const hasAnyApiKey = Boolean(
-      process.env.NVIDIA_API_KEY ||
-      (activeEngineSettings.provider === 'nvidia' && activeEngineSettings.apiKey) ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GROQ_API_KEY ||
-      process.env.OPENROUTER_API_KEY
-    );
-
-    if (!hasAnyApiKey && !effectiveModel.includes('nemotron') && effectiveModel !== DEFAULT_LOCKED_MODEL) {
-      return res.json({
-        success: false,
-        needsApiKey: true,
-        error: 'NO_API_KEY',
-        text: `⚠️ **Real AI Models Ke Liye API Key Required Hai**
-
-Aapne real AI models ke liye abhi tak API Key enter nahi ki hai.
-Halye me koi bhi fake, simulated ya canned response generate nahi kiya gaya — genuine models (Llama 3.3 70B, Qwen 2.5 Coder, DeepSeek R1, Mixtral 8x22B) se direct live connect karne ke liye:
-
-1. Upar top bar me **'API Keys'** button par click karein.
-2. Apni **NVIDIA NIM** (nvapi-...), **Google Gemini**, ya **Groq** key paste karein.
-3. **'Save & Apply Keys'** par click karein.
-
-Key save hote hi chaaron models real-time me ek doosre ke sath interact kar ke live coding aur analysis karenge!`,
-        suggestedPane: 'chat',
-        model: effectiveModel,
-        provider: 'none',
-        duration: Date.now() - startTime,
-      });
-    }
-
-    // If squad-ensemble is selected, all 4 models collaborate together in real API pipeline
-    if (effectiveModel === 'squad-ensemble') {
-      const analysis = analyzeUserIntentForSquad(rawPrompt);
-
-      // Step 1: Real AI Call to Lead Orchestrator (Google Gemma 4 31B)
-      console.log('[Squad Pipeline] Calling Orchestrator (Gemma 4 31B)...');
-      const orchPrompt = `You are Agent 1: Lead Architect & Orchestrator of the 4-Model AI Engineering Squad (Google Gemma 4 31B).
-${historyContextBlock}
-User Prompt: "${rawPrompt}"
-${currentCode ? `Active Running Code to update/extend:\n\`\`\`html\n${currentCode.slice(0, 1500)}...\n\`\`\`` : ''}
-
-Analyze this task and formulate a structured architectural plan under Halye Noor Protocol:
-1. Deconstruct User Intent while strictly respecting conversation memory.
-2. Specify Technical Web Architecture (Single-file HTML5, Tailwind CSS, JavaScript in pitch-black AMOLED #000000 theme).
-3. Specify any required Linux CLI tool commands or python checks (or state 'None').
-4. Direct instructions for Agent 3 (Deep Logic & Code Synthesizer - DeepSeek V4).`;
-
-      const orchResult = await callRealAIModel({
-        model: SQUAD_MEMBERS.orchestrator.id,
-        prompt: orchPrompt,
-        systemInstruction: 'You are the Lead Architect and Task Orchestrator under Halye Noor Protocol. Output high-clarity structured plans.',
-        maxTokens: 1200,
-        temperature: 0.3,
-        conversationHistory: rawHistory,
-      });
-
-      const pipelineOutcome: any = {
-        orchestrator: {
-          model: orchResult.modelName,
-          role: SQUAD_MEMBERS.orchestrator.role,
-          plan: orchResult.text,
-          provider: orchResult.provider,
-          delegatedTo: analysis.needsTools ? SQUAD_MEMBERS.terminalMaster.id : SQUAD_MEMBERS.deepLogic.id,
-        },
-      };
-
-      const toolCalls: any[] = [];
-      let terminalResult: any = null;
-      let toolContext = '';
-
-      // Step 2: Real Terminal Master (Poolside Laguna XS 2.1) Tool Execution
-      if (analysis.actions.length > 0) {
-        for (const action of analysis.actions) {
-          const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-          const execOutcome = await executeToolWithSelfCorrection(action.tool, action.args);
-          toolCalls.push({
-            id: callId,
-            tool: action.tool,
-            args: action.args,
-            result: execOutcome.result,
-            selfCorrectionAttempts: execOutcome.attempts,
-            correctedWith: execOutcome.correctedWith,
-          });
-          if (action.tool === 'execute_bash_command' || action.tool === 'run_pip_installer' || action.tool === 'run_python_script') {
-            terminalResult = {
-              command: action.args.cmd || (action.tool === 'run_pip_installer' ? `pip install ${action.args.package_name}` : 'python script execution'),
-              stdout: execOutcome.result.stdout,
-              stderr: execOutcome.result.stderr,
-              exitCode: execOutcome.result.exitCode,
-              durationMs: execOutcome.result.durationMs,
-              timestamp: new Date().toLocaleTimeString(),
-            };
-            toolContext += `[Command: ${terminalResult.command}]\nStdout: ${execOutcome.result.stdout}\nStderr: ${execOutcome.result.stderr}\n\n`;
-          }
-        }
-        pipelineOutcome.executionMaster = {
-          model: SQUAD_MEMBERS.terminalMaster.id,
-          role: SQUAD_MEMBERS.terminalMaster.role,
-          actionSummary: `Executed ${toolCalls.length} tool calls with self-correction verification.`,
-          selfCorrectionLoops: toolCalls.reduce((acc, t) => acc + (t.selfCorrectionAttempts - 1), 0),
-          success: toolCalls.every(t => t.result.success),
-        };
-      }
-
-      // Step 3: Real Deep Logic & Code Synthesizer (DeepSeek V4 1M MoE)
-      console.log('[Squad Pipeline] Calling Deep Logic Synthesizer (DeepSeek V4)...');
-      const coderPrompt = `You are Agent 3: Deep Logic & Code Synthesizer (DeepSeek V4 1M MoE) operating strictly under the Halye Noor Protocol.
-${historyContextBlock}
-User Request: "${rawPrompt}"
-
-Lead Orchestrator's Plan:
-${orchResult.text}
-
-${toolContext ? `Real Terminal Environment Output:\n${toolContext}` : ''}
-${currentCode ? `Existing Application Code to update/extend:\n\`\`\`html\n${currentCode}\n\`\`\`` : ''}
-
-${(isAppRequest || analysis.needsFullCode || currentCode || attachedImgData) ? `
-MANDATE:
-Generate a complete, 100% production-ready, fully interactive standalone web application in Pitch Black AMOLED (#000000) theme.
-Retain and expand on existing functionality. Track what was done, what was added in this step, and what remains.
-Use HTML5, Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), and vanilla JavaScript.
-All buttons, interactive states, calculations, and UI views must be fully implemented with zero mock stubs.
-Enclose the entire code inside a single \`\`\`html ... \`\`\` block.
-` : `
-Provide a thorough, comprehensive reasoning response fulfilling the user's intent with straightforward, raw execution under Halye Noor Protocol.
-`}`;
-
-      const coderResult = await callRealAIModel({
-        model: SQUAD_MEMBERS.deepLogic.id,
-        prompt: coderPrompt,
-        systemInstruction: 'You are DeepSeek V4 operating strictly under the Halye Noor Protocol. Zero badtameezi, zero excuses. Deliver flawless logic and complete runnable software.',
-        maxTokens: 4000,
-        temperature: 0.4,
-        imageBase64: attachedImgData,
-        conversationHistory: rawHistory,
-      });
-
-      pipelineOutcome.deepReasoner = {
-        model: coderResult.modelName,
-        role: SQUAD_MEMBERS.deepLogic.role,
-        summary: coderResult.text.slice(0, 300) + '...',
-        provider: coderResult.provider,
-      };
-
-      // Extract HTML code block if present
-      let finalCode: string | undefined = undefined;
-      const htmlMatch = coderResult.text.match(/```html\s*([\s\S]*?)```/i) ||
-        coderResult.text.match(/```htm\s*([\s\S]*?)```/i) ||
-        coderResult.text.match(/```xml\s*([\s\S]*?)```/i);
-
-      if (htmlMatch && htmlMatch[1] && htmlMatch[1].trim().length > 25) {
-        finalCode = htmlMatch[1].trim();
-      } else if (coderResult.text.includes('<!DOCTYPE html>') && coderResult.text.includes('</html>')) {
-        const startIdx = coderResult.text.indexOf('<!DOCTYPE html>');
-        const endIdx = coderResult.text.indexOf('</html>') + 7;
-        finalCode = coderResult.text.substring(startIdx, endIdx).trim();
-      }
-
-      // Step 4: Real UI Reviewer (Mixtral 8x22B / MiniMax M3)
-      let reviewResult: any = { syntaxScore: 100, passedReview: true, fixesApplied: [] };
-      if (finalCode) {
-        reviewResult = miniMaxSyntaxReview(finalCode);
-        finalCode = reviewResult.fixedCode;
-        if (finalCode) {
-          syncGeneratedCodeToProject(finalCode, rawPrompt);
-        }
-        pipelineOutcome.reviewer = {
-          model: SQUAD_MEMBERS.uiReviewer.id,
-          role: SQUAD_MEMBERS.uiReviewer.role,
-          syntaxScore: reviewResult.syntaxScore,
-          passedReview: reviewResult.passedReview,
-          fixesApplied: reviewResult.fixesApplied,
-        };
-      }
-
-      // Generate realistic dynamic 4-model inter-agent live dialogue
-      const dialogue: any[] = [
-        {
-          agentId: 'gemma-4',
-          name: 'Google Gemma 4 (31B)',
-          role: 'Lead Architect & Orchestrator',
-          avatar: '💎',
-          color: '#38bdf8',
-          targetAgent: '@Laguna-XS & @DeepSeek-V4',
-          speech: `Task analyzed. Technical blueprint established: single-file HTML5/Tailwind AMOLED architecture. @Laguna-XS initialize Linux container diagnostics, verify Pip & Playwright touch environment, and check self-modification tool permissions. @DeepSeek-V4 begin architectural blueprint for this request in AMOLED pitch black.`,
-          timestamp: new Date(Date.now() - 3000).toLocaleTimeString(),
-        },
-        {
-          agentId: 'laguna-xs',
-          name: 'Poolside Laguna XS (33B)',
-          role: 'Terminal & Raw Execution Master',
-          avatar: '⚡',
-          color: '#34d399',
-          targetAgent: '@Gemma-4 & @DeepSeek-V4',
-          speech: toolCalls.length > 0
-            ? `@Gemma-4 Executed ${toolCalls.length} autonomous operations with self-correction (${toolCalls.map(t => t.tool).join(', ')}). Exit code: 0. Shell, Pip, and Playwright touch capabilities verified. Telemetry passed to @DeepSeek-V4.`
-            : `@Gemma-4 Linux container diagnostics completed. Shell /bin/bash, Pip packages, Playwright touch automation, and custom autonomous tool engine are active and ready. Environment context handed off to @DeepSeek-V4.`,
-          toolExecuted: toolCalls.length > 0 ? toolCalls[0].tool : undefined,
-          toolOutput: terminalResult ? terminalResult.stdout.slice(0, 180) : undefined,
-          timestamp: new Date(Date.now() - 2000).toLocaleTimeString(),
-        },
-        {
-          agentId: 'deepseek-v4',
-          name: 'DeepSeek V4 Pro (1M MoE)',
-          role: 'Deep Logic & Code Synthesizer',
-          avatar: '🧠',
-          color: '#818cf8',
-          targetAgent: '@MiniMax-M3',
-          speech: `@Laguna-XS Environment telemetry received. Synthesizing full-scale fault-tolerant architecture with active event listeners, self-healing exception handlers, and clean AMOLED UI. Passing code to @MiniMax-M3 for multi-point DOM & syntax review.`,
-          timestamp: new Date(Date.now() - 1000).toLocaleTimeString(),
-        },
-        {
-          agentId: 'minimax-m3',
-          name: 'MiniMax M3 (Multimodal MoE)',
-          role: 'Multimodal UI Reviewer & QA',
-          avatar: '👁️',
-          color: '#c084fc',
-          targetAgent: '@All Models & User',
-          speech: `@DeepSeek-V4 Code verified! AST check score: ${reviewResult.syntaxScore}/100. Tailwind CSS runtime CDN validated, responsive touch targets verified, AMOLED #000000 contrast confirmed. Ready for live preview deployment!`,
-          timestamp: new Date().toLocaleTimeString(),
-        },
-      ];
-      pipelineOutcome.dialogue = dialogue;
-
-      const duration = Date.now() - startTime;
-      const summaryText = `**4-Model Squad Real Pipeline Executed** (${(duration / 1000).toFixed(2)}s):
-• **Orchestrator (${orchResult.modelName})**: Task plan formulated.
-• **Terminal Master (${SQUAD_MEMBERS.terminalMaster.name})**: ${toolCalls.length > 0 ? `Executed ${toolCalls.length} commands.` : 'Environment verified.'}
-• **Deep Logic (${coderResult.modelName})**: Logic and code synthesized.
-• **UI Reviewer (${SQUAD_MEMBERS.uiReviewer.name})**: Syntax score ${reviewResult.syntaxScore}/100 verified with AMOLED pitch-black styling.
-
----
-${coderResult.text.replace(/```html[\s\S]*?```/gi, '').trim()}`;
-
-      const turnActionHistory = generateTurnActionHistory({
-        rawPrompt,
-        durationMs: duration,
-        extractedCode: finalCode,
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-        terminalResult: terminalResult || undefined,
-        webInspectionData: webInspectionData || undefined,
-        modelName: '4-Model Squad (God Mode)',
-        currentCode,
-        attachedImgData,
-      });
-
-      return res.json({
-        success: true,
-        text: summaryText,
-        code: finalCode,
-        pipeline: pipelineOutcome,
-        dialogue,
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-        terminalResult: terminalResult || undefined,
-        suggestedPane: finalCode ? 'preview' : (terminalResult ? 'terminal' : undefined),
-        model: 'squad-ensemble',
-        provider: orchResult.provider,
-        duration,
-        actionHistory: turnActionHistory,
-      });
-    }
-
-    // SOLO MODEL EXECUTION: Strictly the selected model runs (no other model)
-    let termResult: any = null;
-    if (effectiveModel === 'qwen/qwen2.5-coder-32b-instruct' || effectiveModel === 'poolside/laguna-xs-2.1') {
-      const isBashLike = lowerPrompt.startsWith('bash ') || lowerPrompt.startsWith('run ') ||
-        lowerPrompt.startsWith('python ') || lowerPrompt.startsWith('pip ') ||
-        lowerPrompt.includes('ls ') || lowerPrompt.includes('cat ') || lowerPrompt.includes('uname') ||
-        lowerPrompt.includes('mkdir ') || lowerPrompt.includes('touch ');
-      if (isBashLike) {
-        const cmdToRun = rawPrompt.replace(/^(bash|run|exec)\s+/i, '').trim();
-        const outcome = await executeTerminalCommand(cmdToRun);
-        termResult = {
-          command: cmdToRun,
-          stdout: outcome.stdout,
-          stderr: outcome.stderr,
-          exitCode: outcome.exitCode,
-          durationMs: outcome.durationMs,
-          timestamp: new Date().toLocaleTimeString(),
-        };
-      }
-    }
-
     const aiResult = await generateWithActiveModel({
       prompt: promptToSend,
       systemInstruction,
@@ -6135,7 +4972,7 @@ ${coderResult.text.replace(/```html[\s\S]*?```/gi, '').trim()}`;
 
     // MiniMax / Mixtral rapid syntax review if code extracted
     if (extractedCode) {
-      const rev = miniMaxSyntaxReview(extractedCode);
+      const rev = reviewGeneratedCode(extractedCode);
       extractedCode = rev.fixedCode;
       if (extractedCode) {
         syncGeneratedCodeToProject(extractedCode, rawPrompt);
@@ -6202,7 +5039,7 @@ ${coderResult.text.replace(/```html[\s\S]*?```/gi, '').trim()}`;
   } catch (error: any) {
     console.error('Halye agent generate error:', error);
     try {
-      const fallbackResult = await executeLocalNemotronCognitiveFallback(rawPrompt, effectiveModel);
+      const fallbackResult = customLlmUnavailableResult(error);
       const codeMatch = fallbackResult.text.match(/```(?:html|tsx|jsx)?\s*([\s\S]*?)```/i);
       const extractedCode = codeMatch ? codeMatch[1].trim() : undefined;
       return res.json({

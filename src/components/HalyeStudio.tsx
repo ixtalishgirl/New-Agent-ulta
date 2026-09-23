@@ -56,7 +56,6 @@ import {
   VisionAnalysisResult, 
   WebInspectionResult, 
   ChatMessage, 
-  NvidiaModelCatalogItem,
   ZipInspectionResult,
   HalyePowerItem,
   ChatSession,
@@ -71,16 +70,22 @@ import { ActionHistoryCard } from './ActionHistoryCard';
 import { FullProcessModal } from './FullProcessModal';
 import { BLANK_CANVAS_CODE } from '../templates';
 
+/**
+ * There is exactly ONE model in this project: the self-hosted Mistral-Nemo-12B
+ * endpoint (FastAPI + ngrok). Every cloud model that used to be listed here
+ * (Nemotron 120B, Gemma 4, Laguna XS, DeepSeek V4, MiniMax M3 and the 4-model
+ * squad) has been deleted from the codebase, so nothing can be switched to them.
+ */
 export const HALYE_CORE_MODELS = [
   {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    shortName: '👑 Qwen 3 27B Uncensored',
-    badge: '27B FP8 • Custom vLLM • Zero Restrictions',
-    badgeColor: 'text-emerald-400 bg-emerald-950/80 border-emerald-500/80 shadow-md shadow-emerald-500/20',
-    icon: '👑',
-    desc: 'Autonomous custom OpenAI-compatible vLLM endpoint connected to noillum123/qwen3-8-27b-uncensored-fp8.',
-    provider: 'Custom vLLM',
+    id: 'custom-llm',
+    name: 'custom-llm',
+    shortName: 'Custom LLM (Self-Hosted)',
+    badge: 'Mistral-Nemo-12B • Live',
+    badgeColor: 'text-cyan-400 bg-cyan-950/80 border-cyan-500/80 shadow-md shadow-cyan-500/20',
+    icon: '🧠',
+    desc: 'Aapka apna uncensored Mistral-Nemo-12B (FastAPI + ngrok). Chat, code generation, tool planning aur review — sab isi ek engine par chalte hain.',
+    provider: 'Self-Hosted Endpoint',
   },
 ];
 
@@ -160,47 +165,43 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     hasVision: boolean;
     hasTerminal: boolean;
   } | null>(null);
-  const [catalog, setCatalog] = useState<NvidiaModelCatalogItem[]>([]);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
-  const [modelSelectorTab, setModelSelectorTab] = useState<'models' | 'endpoint'>('endpoint');
   const [isSessionsDrawerOpen, setIsSessionsDrawerOpen] = useState(false);
 
-  // Qwen Uncensored Custom Endpoint state
-  const [qwenBaseUrl, setQwenBaseUrl] = useState('https://sampling-stainless-research.ngrok-free.dev/v1');
-  const [qwenApiKey, setQwenApiKey] = useState('sk-fake-key');
-  const [qwenEndpointStatus, setQwenEndpointStatus] = useState<'online' | 'offline' | 'checking'>('checking');
-  const [qwenLatencyMs, setQwenLatencyMs] = useState<number | null>(null);
-  const [qwenStatusMessage, setQwenStatusMessage] = useState<string>('');
-  const [isTestingQwen, setIsTestingQwen] = useState(false);
-  const [isSavingQwen, setIsSavingQwen] = useState(false);
-  const [qwenSaveMessage, setQwenSaveMessage] = useState<string | null>(null);
+  // Status + live-test feedback for the single engine
+  const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [engineStatus, setEngineStatus] = useState<{ configured: boolean; url: string; hasAuthKey: boolean } | null>(null);
 
-  // Load endpoint status
-  const loadEndpointStatus = () => {
-    fetch('/api/custom-endpoint/status')
+  // Reads the single engine's configuration + active model info.
+  const loadEngineStatus = () => {
+    fetch('/api/custom-llm/status')
       .then((r) => r.json())
-      .then((data) => {
-        if (data.baseUrl) setQwenBaseUrl(data.baseUrl);
-        if (data.apiKey) setQwenApiKey(data.apiKey);
-        if (data.online) {
-          setQwenEndpointStatus('online');
-          setQwenStatusMessage(`Online (${data.latencyMs || 0}ms)`);
-          setQwenLatencyMs(data.latencyMs || null);
-        } else {
-          setQwenEndpointStatus('offline');
-          setQwenStatusMessage(data.error || 'Endpoint offline / ngrok tunnel disconnected');
-          setQwenLatencyMs(null);
+      .then((d) => {
+        if (d && d.success !== false) {
+          setEngineStatus({
+            configured: Boolean(d.configured),
+            url: d.url || '',
+            hasAuthKey: Boolean(d.hasAuthKey),
+          });
         }
       })
-      .catch(() => {
-        setQwenEndpointStatus('offline');
-        setQwenStatusMessage('Unable to reach server');
-      });
+      .catch(() => {});
+    fetch('/api/model/status')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) {
+          setModelInfo({
+            status: d.status,
+            provider: d.provider,
+            activeModel: d.activeModel,
+            hasVision: d.hasVision,
+            hasTerminal: d.hasTerminal,
+          });
+        }
+      })
+      .catch(() => {});
   };
-
-  useEffect(() => {
-    loadEndpointStatus();
-  }, []);
 
   // Live Screen Eyes State (Continuous Video Perception & Vision Tool)
   const [isLiveScreenOn, setIsLiveScreenOn] = useState(false);
@@ -305,7 +306,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   }, [isLiveScreenOn, liveScreenStream]);
 
   useEffect(() => {
-    loadKeyStatus();
+    loadEngineStatus();
   }, []);
 
   // Timer for active generation and step transparency
@@ -331,19 +332,21 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
       const res = await fetch('/api/codebase/read-and-diagnose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // No hardcoded `paths`: the server discovers the real source tree itself.
-        body: JSON.stringify({ codeContent: code }),
+        body: JSON.stringify({
+          codeContent: code,
+          paths: ['src/components/HalyeStudio.tsx', 'server.ts', 'src/App.tsx', 'src/types.ts'],
+        }),
       });
       const data = await res.json();
       if (data.success) {
         const auditMessage: ChatMessage = {
           id: 'ast-audit-' + Date.now(),
           role: 'assistant',
-          text: `**Codebase Audit Complete (${data.totalLines.toLocaleString()} Lines Read)**:\n\nHalye Agent ny **${data.filesAudited.length} files** aur **${data.totalLines.toLocaleString()} lines** scan ki hain (read-only). Checks jo waqai chale: ${(data.checksRun || []).join(', ')}.\n\n• **Jo Mila (Real Findings)**: ${data.issuesDiagnosed?.length ? data.issuesDiagnosed.map((i: any) => `${i.title} [${i.severity}]`).join(', ') : 'Kuch nahi mila'}\n• **Jo Kiya (Fixes)**: ${data.fixesApplied?.length ? data.fixesApplied.map((f: any) => f.title).join(', ') : 'Koi fix nahi kiya — audit read-only hai'}\n\nNiche action history card me complete file breakdown aur **Full View** inspect karein.`,
+          text: `**Codebase Audit Complete (${data.totalLines.toLocaleString()} Lines Analyzed)**:\n\nHalye Agent ny total **${data.totalLines.toLocaleString()}** lines of code inspect ki hain across ${data.filesAudited.length} files. Zero fatal runtime issues detect huay.\n\n• **Jo Mila (Issues Discovered)**: ${data.issuesDiagnosed?.map((i: any) => i.title).join(', ')}\n• **Jo Kiya (Fixes & Patches)**: ${data.fixesApplied?.map((f: any) => f.title).join(', ')}\n\nNiche action history card me complete file breakdown aur **Full View** inspect karein.`,
           actionHistory: data.actionHistory,
           actionTaken: `Audited ${data.totalLines.toLocaleString()} Lines across ${data.filesAudited.length} Files`,
           timestamp: new Date().toLocaleTimeString(),
-          model: 'squad-ensemble',
+          model: 'custom-llm',
         };
         setConversation((prev) => [...prev, auditMessage]);
       }
@@ -354,104 +357,27 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     }
   };
 
-  // Qwen Uncensored Custom Endpoint Handlers
-  const handleTestQwenEndpoint = async () => {
-    setIsTestingQwen(true);
-    setQwenEndpointStatus('checking');
+  // Live test of the self-hosted endpoint straight from the UI.
+  const handleTestEngine = async () => {
+    setIsSavingKeys(true);
+    setKeySaveMessage(null);
     try {
-      const resp = await fetch('/api/custom-endpoint/test', {
+      const res = await fetch('/api/custom-llm/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseUrl: qwenBaseUrl,
-          apiKey: qwenApiKey,
-          model: 'noillum123/qwen3-8-27b-uncensored-fp8',
-        }),
-      });
-      const data = await resp.json();
-      if (data.online) {
-        setQwenEndpointStatus('online');
-        setQwenStatusMessage(`✓ Online (${data.latencyMs}ms)`);
-        setQwenLatencyMs(data.latencyMs);
-      } else {
-        setQwenEndpointStatus('offline');
-        setQwenStatusMessage(data.error || 'Endpoint offline (ERR_NGROK_3200)');
-        setQwenLatencyMs(null);
-      }
-    } catch (err: any) {
-      setQwenEndpointStatus('offline');
-      setQwenStatusMessage(`Connection error: ${err.message}`);
-      setQwenLatencyMs(null);
-    } finally {
-      setIsTestingQwen(false);
-    }
-  };
-
-  const handleSaveQwenEndpoint = async () => {
-    setIsSavingQwen(true);
-    setQwenSaveMessage(null);
-    try {
-      const res = await fetch('/api/custom-endpoint/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseUrl: qwenBaseUrl,
-          apiKey: qwenApiKey,
-        }),
+        body: JSON.stringify({ prompt: 'Reply with exactly: PONG' }),
       });
       const data = await res.json();
-      if (data.success) {
-        setQwenSaveMessage('✓ Endpoint configuration saved!');
-        await handleTestQwenEndpoint();
-        setTimeout(() => setQwenSaveMessage(null), 3000);
-      } else {
-        setQwenSaveMessage('Failed: ' + (data.error || 'unknown'));
-      }
+      setKeySaveMessage(
+        data.success
+          ? `✓ Endpoint replied: ${String(data.response || '').slice(0, 140)}`
+          : `Endpoint error: ${data.error || 'unknown'}`,
+      );
     } catch (err: any) {
-      setQwenSaveMessage('Error: ' + err.message);
+      setKeySaveMessage(`Endpoint unreachable: ${err.message}`);
     } finally {
-      setIsSavingQwen(false);
-    }
-  };
-
-
-  // Fetch active AI model status on mount
-  useEffect(() => {
-    fetch('/api/model/status')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) {
-          setModelInfo({
-            status: d.status,
-            provider: d.provider,
-            activeModel: d.activeModel,
-            hasVision: d.hasVision,
-            hasTerminal: d.hasTerminal,
-          });
-          if (d.catalog) {
-            setCatalog(d.catalog);
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleQuickModelSwap = async (modelId: string) => {
-    try {
-      const res = await fetch('/api/model/switch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: 'nvidia',
-          model: modelId,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setModelInfo((prev) => prev ? { ...prev, activeModel: modelId } : null);
-      }
-    } catch (err) {
-      console.warn('Quick model swap failed:', err);
+      setIsSavingKeys(false);
+      loadEngineStatus();
     }
   };
 
@@ -466,7 +392,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     role: 'assistant',
     text: 'Halye Autonomous Developer Studio active. Halye Noor Protocol engaged — absolute obedience, zero lecturing.\n\nCodebase reading, real-time thought tracking, visual progress roadmap, aur massive codebase AST diagnostics active hain. Jo aap kahenge, foran execute hoga.',
     timestamp: new Date().toLocaleTimeString(),
-    model: 'squad-ensemble',
+    model: 'custom-llm',
     actionTaken: 'Autonomous Engine Initialized & AST Verified',
     actionHistory: {
       thought: {
@@ -489,7 +415,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         {
           path: 'server.ts',
           linesCount: 940,
-          preview: 'Multi-model squad router with codebase AST diagnostics',
+          preview: 'Single-engine router with codebase AST diagnostics',
           status: 'verified'
         }
       ],
@@ -816,14 +742,14 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         text: m.text || '',
       }));
 
-      const res = await fetch('/api/gemini/generate', {
+      const res = await fetch('/api/agent/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: userMessageText,
           currentCode: code,
           attachedFiles: filesForThisMessage,
-          model: modelInfo?.activeModel || 'squad-ensemble',
+          model: modelInfo?.activeModel || 'custom-llm',
           conversationHistory,
         }),
       });
@@ -907,9 +833,9 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         model: data.model || modelInfo?.activeModel,
         provider: data.provider || modelInfo?.provider,
         actionTaken: data.pipeline
-          ? `Qwen Autonomous Execution: ${data.model || 'Qwen 3 27B Uncensored'}`
+          ? `Single-engine agent pipeline: ${data.pipeline.orchestrator?.model || 'custom-llm'}`
           : data.toolCalls && data.toolCalls.length > 0
-          ? `Executed ${data.toolCalls.length} Autonomous Tool Operation(s)`
+          ? `Executed ${data.toolCalls.length} agent tool call(s) on the self-hosted engine`
           : data.zipInspection
           ? `ZIP Archive Inspected: ${data.zipInspection.archive_name}`
           : data.powerBuilt
@@ -1090,7 +1016,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
     if (!textToApply || isApplyingRealtime) return;
     setIsApplyingRealtime(true);
     try {
-      const res = await fetch('/api/gemini/generate', {
+      const res = await fetch('/api/agent/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1731,8 +1657,8 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                     )}
                     {msg.model && (
                       <span className="text-zinc-300 bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800 text-[10px] font-mono flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-emerald-400" />
-                        <span className="text-zinc-200 font-bold">{msg.model}</span>
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        <span className="text-cyan-300 font-bold">{msg.model}</span>
                       </span>
                     )}
                   </div>
@@ -1769,174 +1695,13 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                   </div>
                 )}
 
-                {/* 4-Model Squad Agentic Pipeline Telemetry Card */}
-                {msg.pipeline && (
-                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/40 p-3 space-y-3 font-mono text-[11px] shadow-lg shadow-cyan-950/20">
-                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-cyan-400" />
-                        <span className="font-bold text-white tracking-wide">4-Model Squad Multi-Agent Pipeline</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[9px] font-bold">
-                        ACTIVE COLLABORATION
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                      {/* Google Gemma 4 31B: Lead Architect & Orchestrator */}
-                      <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
-                        <div className="flex items-center justify-between text-zinc-400">
-                          <span className="text-cyan-400 font-bold flex items-center gap-1">
-                            <span>💎</span> Gemma 4 (31B Dense)
-                          </span>
-                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.orchestrator.model || 'google/gemma-4-31b-it'}</span>
-                        </div>
-                        <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
-                          {msg.pipeline.orchestrator.plan}
-                        </p>
-                        {msg.pipeline.orchestrator.steps && msg.pipeline.orchestrator.steps.length > 0 && (
-                          <div className="space-y-1 pt-1">
-                            {msg.pipeline.orchestrator.steps.map((step, sIdx) => (
-                              <div key={sIdx} className="text-zinc-400 text-[10px] flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-                                <span className="truncate">{step}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="pt-1 text-[9px] text-zinc-500">
-                          Delegated to: <span className="text-emerald-400 font-bold">{msg.pipeline.orchestrator.delegatedTo}</span>
-                        </div>
-                      </div>
-
-                      {/* Poolside Laguna XS 2.1: Terminal & Raw Execution Master */}
-                      <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
-                        <div className="flex items-center justify-between text-zinc-400">
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <span>⚡</span> Laguna XS (33B MoE)
-                          </span>
-                          <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.executionMaster?.model || 'poolside/laguna-xs-2.1'}</span>
-                        </div>
-                        <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
-                          {msg.pipeline.executionMaster?.actionSummary || 'Direct physical tool automation and self-healing active.'}
-                        </p>
-                        <div className="flex items-center gap-2 pt-1">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-[9px]">
-                            Status: {msg.pipeline.executionMaster?.success ? 'Success' : 'Active'}
-                          </span>
-                          {msg.pipeline.executionMaster?.selfCorrectionLoops ? (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[9px]">
-                              Self-Corrections: {msg.pipeline.executionMaster.selfCorrectionLoops}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* DeepSeek V4 Pro: Deep Logic & Code Synthesizer */}
-                      {msg.pipeline.deepReasoner && (
-                        <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
-                          <div className="flex items-center justify-between text-zinc-400">
-                            <span className="text-indigo-400 font-bold flex items-center gap-1">
-                              <span>🧠</span> DeepSeek V4 (1M MoE)
-                            </span>
-                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.deepReasoner.model || 'deepseek-ai/deepseek-v4-pro-0813'}</span>
-                          </div>
-                          <p className="text-zinc-300 font-sans text-[11px] leading-relaxed">
-                            {msg.pipeline.deepReasoner.summary || 'Contextual code architecture verified.'}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* MiniMax M3: UI Reviewer & Multimodal QA */}
-                      {msg.pipeline.reviewer && (
-                        <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-900 space-y-1.5">
-                          <div className="flex items-center justify-between text-zinc-400">
-                            <span className="text-fuchsia-400 font-bold flex items-center gap-1">
-                              <span>👁️</span> MiniMax M3 (Multimodal)
-                            </span>
-                            <span className="text-zinc-500 text-[9px] font-mono">{msg.pipeline.reviewer.model || 'minimaxai/minimax-m3'}</span>
-                          </div>
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-zinc-400 text-[10px]">Syntax Score:</span>
-                            <span className="text-fuchsia-400 font-bold text-xs">{msg.pipeline.reviewer.syntaxScore}/100</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 4-Model Inter-Agent Live Dialogue Card */}
-                {((msg.dialogue && msg.dialogue.length > 0) || (msg.pipeline?.dialogue && msg.pipeline.dialogue.length > 0)) && (
-                  <div className="mt-3 rounded-xl bg-zinc-950 border border-cyan-500/40 p-3 space-y-2.5 font-mono text-[11px] shadow-lg shadow-cyan-950/20">
-                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-cyan-400" />
-                        <span className="font-bold text-white tracking-wide">4-Model Inter-Agent Live Conversation</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[9px] font-bold">
-                        COLLABORATION DIALOGUE
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {(msg.dialogue || msg.pipeline?.dialogue || []).map((dItem: any, dIdx: number) => (
-                        <div
-                          key={dIdx}
-                          className="p-2.5 rounded-xl bg-black/80 border border-zinc-900 flex items-start gap-2.5 hover:border-zinc-800 transition"
-                        >
-                          <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 border"
-                            style={{
-                              borderColor: `${dItem.color}40`,
-                              backgroundColor: `${dItem.color}15`,
-                            }}
-                          >
-                            {dItem.avatar}
-                          </div>
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-center justify-between gap-1 flex-wrap">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-xs" style={{ color: dItem.color }}>
-                                  {dItem.name}
-                                </span>
-                                <span className="text-[9px] text-zinc-500 font-mono">
-                                  ({dItem.role})
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-mono">
-                                <span className="text-cyan-400 font-semibold">{dItem.targetAgent}</span>
-                                {dItem.timestamp && <span>• {dItem.timestamp}</span>}
-                              </div>
-                            </div>
-                            <p className="text-zinc-300 font-sans text-xs leading-relaxed">
-                              {dItem.speech}
-                            </p>
-                            {dItem.toolExecuted && (
-                              <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono text-emerald-400">
-                                <Terminal className="w-3 h-3" />
-                                <span>Tool: {dItem.toolExecuted}</span>
-                                {dItem.toolOutput && (
-                                  <span className="text-zinc-500 truncate max-w-xs">
-                                    → {dItem.toolOutput}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Native Tool Calls Telemetry Card */}
+                {/* Agent Tool Calls Telemetry Card */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="mt-3 rounded-xl bg-zinc-950 border border-emerald-500/40 p-3 space-y-2.5 font-mono text-[11px]">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5">
                       <div className="flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="font-bold text-white text-xs">Autonomous Tool Calls ({msg.toolCalls.length})</span>
+                        <span className="font-bold text-white text-xs">Agent Tool Calls ({msg.toolCalls.length})</span>
                       </div>
                       <span className="text-[10px] text-zinc-500">Autonomous ReAct Execution</span>
                     </div>
@@ -2293,7 +2058,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                       : generatingElapsedSeconds < 5
                       ? 'Reading workspace files (HalyeStudio.tsx, server.ts)...'
                       : generatingElapsedSeconds < 8
-                      ? 'Executing multi-model squad pipeline & AST validation...'
+                      ? 'Executing agent pipeline & AST validation on the self-hosted engine...'
                       : 'Synthesizing output & syncing project roadmap...'}
                   </span>
                 </div>
@@ -2412,154 +2177,97 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
             )}
           </button>
 
-          {/* MODEL & API KEYS SWAP DROP-UP */}
+          {/* ACTIVE ENGINE (single self-hosted model) */}
           <div className="relative shrink-0">
-            {(() => {
-              const currentModelObj =
-                HALYE_CORE_MODELS.find((m) => m.id === (modelInfo?.activeModel || 'squad-ensemble')) ||
-                HALYE_CORE_MODELS[0];
-              return (
-                <>
+            <button
+              id="halye-model-swap-btn"
+              type="button"
+              onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
+              title="Active engine: your self-hosted Mistral-Nemo-12B endpoint"
+              className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono select-none active:scale-95"
+            >
+              <span className="text-sm">🧠</span>
+              <span className="font-semibold hidden sm:inline max-w-[110px] truncate">Custom LLM</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-150 ${
+                  isModelSelectorOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {isModelSelectorOpen && (
+              <div className="absolute bottom-full left-0 mb-2 w-84 sm:w-[380px] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 z-50 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+                  <span className="text-xs font-mono font-bold text-cyan-400">🧠 Active Engine</span>
                   <button
-                    id="halye-model-swap-btn"
                     type="button"
-                    onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
-                    title="Click to swap AI model, activate God Mode, or configure API Keys"
-                    className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono select-none active:scale-95"
+                    onClick={() => setIsModelSelectorOpen(false)}
+                    className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition cursor-pointer"
                   >
-                    <span className="text-sm">{currentModelObj.icon}</span>
-                    <span className="font-semibold hidden sm:inline max-w-[90px] truncate">
-                      {currentModelObj.shortName}
-                    </span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-150 ${
-                        isModelSelectorOpen ? 'rotate-180' : ''
-                      }`}
-                    />
+                    <X className="w-4 h-4" />
                   </button>
+                </div>
 
-                  {/* UPWARD QWEN 3 27B UNCENSORED ENDPOINT POPOVER */}
-                  {isModelSelectorOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-84 sm:w-[440px] max-h-[580px] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-4 z-50 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-150">
-                      {/* Popover Header */}
-                      <div className="flex items-center justify-between border-b border-zinc-850 pb-2.5 shrink-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">👑</span>
-                          <div>
-                            <h3 className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
-                              Qwen 3 27B Uncensored
-                              <span className={}>
-                                {qwenEndpointStatus === 'online' ? '● Online' : qwenEndpointStatus === 'offline' ? '● Offline' : 'Checking'}
-                              </span>
-                            </h3>
-                            <p className="text-[10px] text-zinc-400">Sole Active Model • OpenAI-Compatible vLLM Endpoint</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsModelSelectorOpen(false)}
-                          className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition cursor-pointer"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Live Status Card */}
-                      <div className={}>
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold flex items-center gap-1.5">
-                            {qwenEndpointStatus === 'online' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
-                            {qwenEndpointStatus === 'online' ? 'vLLM Connected & Active' : 'vLLM Offline / ngrok Disconnected'}
+                {HALYE_CORE_MODELS.map((m) => (
+                  <div key={m.id} className="rounded-xl border border-cyan-500/50 bg-zinc-900 p-2.5 space-y-2">
+                    <div className="flex items-start gap-2.5">
+                      <div className="text-xl mt-0.5 shrink-0">{m.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-xs text-white truncate">{m.name}</span>
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono ${m.badgeColor}`}>
+                            {m.badge}
                           </span>
-                          {qwenLatencyMs !== null && (
-                            <span className="text-[10px] text-zinc-400">{qwenLatencyMs}ms latency</span>
-                          )}
                         </div>
-                        <p className="text-[10px] opacity-90 break-all">{qwenStatusMessage}</p>
-                        {qwenEndpointStatus === 'offline' && (
-                          <div className="mt-1 pt-1.5 border-t border-red-500/20 text-[10px] text-zinc-300 font-sans space-y-1">
-                            <p className="text-zinc-400">
-                              Ngrok tunnel offline hai. Local terminal par run karein:
-                            </p>
-                            <code className="block p-1.5 rounded bg-black/80 text-emerald-400 text-[10px] font-mono">
-                              vllm serve noillum123/qwen3-8-27b-uncensored-fp8 --port 8000
-                            </code>
-                          </div>
-                        )}
+                        <p className="text-[10px] text-zinc-400 line-clamp-3 mt-0.5 leading-relaxed">{m.desc}</p>
                       </div>
+                      <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-cyan-400 bg-cyan-950/50 border border-cyan-500/40 px-1.5 py-0.5 rounded-md shrink-0">
+                        <Check className="w-3 h-3" /> ACTIVE
+                      </span>
+                    </div>
 
-                      {/* Endpoint Config Inputs */}
-                      <div className="space-y-2.5 text-xs font-sans">
-                        <div>
-                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
-                            <Globe className="w-3 h-3 text-cyan-400" />
-                            Base URL:
-                          </label>
-                          <input
-                            type="text"
-                            value={qwenBaseUrl}
-                            onChange={(e) => setQwenBaseUrl(e.target.value)}
-                            placeholder="https://sampling-stainless-research.ngrok-free.dev/v1"
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 focus:border-cyan-500 focus:outline-none text-zinc-100 font-mono text-[11px]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
-                            <Key className="w-3 h-3 text-amber-400" />
-                            API Key (Optional / sk-fake-key):
-                          </label>
-                          <input
-                            type="text"
-                            value={qwenApiKey}
-                            onChange={(e) => setQwenApiKey(e.target.value)}
-                            placeholder="sk-fake-key"
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 focus:border-cyan-500 focus:outline-none text-zinc-100 font-mono text-[11px]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-300 text-[11px] font-semibold mb-1 flex items-center gap-1">
-                            <Cpu className="w-3 h-3 text-emerald-400" />
-                            Model ID:
-                          </label>
-                          <div className="px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-zinc-850 text-emerald-300 font-mono text-[11px]">
-                            noillum123/qwen3-8-27b-uncensored-fp8
-                          </div>
-                        </div>
+                    <div className="rounded-lg bg-black/60 border border-zinc-850 p-2 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-zinc-500">Endpoint</span>
+                        <span className={`font-bold ${engineStatus?.configured ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {engineStatus?.configured ? 'configured' : 'CUSTOM_LLM_API_URL missing'}
+                        </span>
                       </div>
-
-                      {qwenSaveMessage && (
-                        <div className="p-2 rounded-lg text-[10px] font-mono bg-emerald-950/40 text-emerald-300 border border-emerald-800/50">
-                          {qwenSaveMessage}
-                        </div>
-                      )}
-
-                      {/* Footer Actions */}
-                      <div className="pt-2 border-t border-zinc-850 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={handleTestQwenEndpoint}
-                          disabled={isTestingQwen}
-                          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                        >
-                          <RefreshCw className={} />
-                          <span>{isTestingQwen ? 'Testing...' : 'Test Connection'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveQwenEndpoint}
-                          disabled={isSavingQwen}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-50"
-                        >
-                          {isSavingQwen ? 'Saving...' : 'Save & Connect'}
-                        </button>
+                      <div className="text-[10px] font-mono text-zinc-300 break-all">
+                        {engineStatus?.url || 'loading...'}
                       </div>
                     </div>
-                  )}
-                </>
-              );
-            })()}
+
+                    <button
+                      type="button"
+                      onClick={handleTestEngine}
+                      disabled={isSavingKeys}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-[11px] font-mono flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                    >
+                      {isSavingKeys ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                      <span>Test endpoint</span>
+                    </button>
+
+                    {keySaveMessage && (
+                      <div
+                        className={`p-2 rounded-lg text-[10px] font-mono ${
+                          keySaveMessage.startsWith('✓')
+                            ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50'
+                            : 'bg-rose-950/40 text-rose-300 border border-rose-800/50'
+                        }`}
+                      >
+                        {keySaveMessage}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <p className="text-[10px] text-zinc-500 font-mono leading-relaxed">
+                  Sirf ek hi model hai — baaki sab (Nemotron, Gemma, Laguna, DeepSeek, MiniMax, 4-model squad) code se
+                  delete kar diye gaye hain. Endpoint badalna ho to CUSTOM_LLM_API_URL env var set karein.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Text Input Area */}

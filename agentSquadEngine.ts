@@ -1,138 +1,44 @@
 /**
- * Master Architecture: Multi-Model Agentic Pipeline with Real Model Inference
- * Real Models:
- * 1. Primary Brain / Orchestrator: meta/llama-3.3-70b-instruct (Meta AI)
- * 2. Agentic Execution & Terminal Master: qwen/qwen2.5-coder-32b-instruct (Alibaba Cloud)
- * 3. Massive Reasoning & Deep Logic: deepseek-ai/deepseek-r1 (DeepSeek AI)
- * 4. UI & Rapid Syntax Fixes: mistralai/mixtral-8x22b-instruct-v0.1 (Mistral AI)
+ * Master Architecture: Autonomous Tool Layer for the single self-hosted engine.
+ *
+ * The agent runs on ONE model: the self-hosted Mistral-Nemo-12B endpoint served
+ * by FastAPI + ngrok (see server.ts -> CUSTOM_LLM_DEFAULT_URL). No cloud model is
+ * configured or selected anywhere in this codebase, so everything here is tool
+ * execution, intent analysis and code review - not model routing.
  */
 
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-export interface ModelSquadMember {
-  id: string;
-  name: string;
-  role: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
-  provider: 'nvidia' | 'openrouter' | 'gemini' | 'custom';
-  parameters: string;
-  speedRating: string;
-  description: string;
-  strengths: string[];
-}
-
-export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
-  orchestrator: {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'Qwen 3 27B Uncensored FP8 (Custom vLLM Orchestrator)',
-    role: 'Orchestrator',
-    provider: 'custom',
-    parameters: '27B Uncensored FP8 • OpenAI-Compatible vLLM',
-    speedRating: 'Fast Agentic Loop',
-    description: 'Autonomous orchestration, reasoning, and tool execution powered by noillum123/qwen3-8-27b-uncensored-fp8 via custom vLLM endpoint.',
-    strengths: ['Qwen 27B Uncensored Core', 'Custom vLLM OpenAI Endpoint', 'LangChain Tool Calling', 'Autonomous Execution'],
-  },
-  terminalMaster: {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'Qwen 3 27B (Autonomous Terminal & Shell)',
-    role: 'Terminal Master',
-    provider: 'custom',
-    parameters: '27B FP8 Core',
-    speedRating: 'Real-time Execution',
-    description: 'Autonomous Linux bash execution, pip automation, and command-line control.',
-    strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Python Scripting', 'Self-Correction Loop'],
-  },
-  deepLogic: {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'Qwen 3 27B (Deep Logic & Code Synthesis)',
-    role: 'Deep Logic',
-    provider: 'custom',
-    parameters: '27B Parameter Neural Core',
-    speedRating: 'Deterministic Logic',
-    description: 'Deterministic code synthesis, refactoring, and deep technical reasoning.',
-    strengths: ['Deterministic Code Synthesis', 'Advanced Algorithms', 'Flawless Code Logic', 'Self-Modification'],
-  },
-  uiReviewer: {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'Qwen 3 27B (UI & Rapid Fixes)',
-    role: 'UI & Rapid Fixes',
-    provider: 'custom',
-    parameters: '27B Multimodal & UI Core',
-    speedRating: 'Sub-second Verification',
-    description: 'Full stack UI, React components, and dynamic style auditing.',
-    strengths: ['React & Tailwind Audit', 'Rapid Fixes', 'Autonomous Tool Execution', 'Playwright Automation'],
-  },
+/**
+ * Descriptor of the one engine this project runs on. Kept in a single place so
+ * the catalog, the API schema and the UI all describe the same brain.
+ */
+export const CUSTOM_LLM_ENGINE = {
+  id: 'custom-llm',
+  name: 'Custom LLM - Mistral-Nemo-12B (Self-Hosted)',
+  provider: 'custom' as const,
+  endpoint: 'https://pancreas-smashing-breeching.ngrok-free.dev/generate',
+  parameters: '12B Mistral-Nemo (Kaggle T4, FastAPI + ngrok)',
+  speedRating: 'Live self-hosted inference',
+  description:
+    'Your own uncensored Mistral-Nemo-12B served over a FastAPI + ngrok endpoint. ' +
+    'It is the only inference engine this agent uses: chat, code generation, tool planning and reviews all run through it.',
+  strengths: [
+    'Self-hosted: no cloud keys, no provider quotas',
+    'Drives every autonomous tool (bash, python, playwright, web search)',
+    'Tool calls are parsed from its JSON replies by the agent executor',
+  ],
+  capabilities: [
+    'execute_bash_command',
+    'run_pip_installer',
+    'run_python_script',
+    'trigger_playwright_automation',
+    'web_search',
+    'create_and_register_custom_tool',
+  ],
 };
-
-export const SQUAD_CATALOG_ITEMS = [
-  {
-    id: 'noillum123/qwen3-8-27b-uncensored-fp8',
-    name: 'Qwen 3 27B Uncensored FP8 (Custom vLLM Sovereign Core)',
-    category: 'Uncensored Frontier' as const,
-    roleInSquad: 'Primary Brain & Sovereign Master' as any,
-    parameters: '27B Parameters • FP8 Quantized vLLM',
-    speedRating: 'Ultra Low Latency vLLM',
-    description: 'Custom OpenAI-compatible vLLM endpoint running noillum123/qwen3-8-27b-uncensored-fp8 with LangChain autonomous function calling, tool use, terminal control, and code execution.',
-    strengths: ['Qwen 27B FP8 Uncensored', 'OpenAI-Compatible vLLM Endpoint', 'Autonomous Tool Execution', 'Full Code & Shell Control'],
-    provider: 'custom' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.orchestrator.id,
-    name: SQUAD_MEMBERS.orchestrator.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.orchestrator.role,
-    parameters: SQUAD_MEMBERS.orchestrator.parameters,
-    speedRating: SQUAD_MEMBERS.orchestrator.speedRating,
-    description: SQUAD_MEMBERS.orchestrator.description,
-    strengths: SQUAD_MEMBERS.orchestrator.strengths,
-    provider: 'custom' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.terminalMaster.id,
-    name: SQUAD_MEMBERS.terminalMaster.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.terminalMaster.role,
-    parameters: SQUAD_MEMBERS.terminalMaster.parameters,
-    speedRating: SQUAD_MEMBERS.terminalMaster.speedRating,
-    description: SQUAD_MEMBERS.terminalMaster.description,
-    strengths: SQUAD_MEMBERS.terminalMaster.strengths,
-    provider: 'custom' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.deepLogic.id,
-    name: SQUAD_MEMBERS.deepLogic.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.deepLogic.role,
-    parameters: SQUAD_MEMBERS.deepLogic.parameters,
-    speedRating: SQUAD_MEMBERS.deepLogic.speedRating,
-    description: SQUAD_MEMBERS.deepLogic.description,
-    strengths: SQUAD_MEMBERS.deepLogic.strengths,
-    provider: 'custom' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.uiReviewer.id,
-    name: SQUAD_MEMBERS.uiReviewer.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.uiReviewer.role,
-    parameters: SQUAD_MEMBERS.uiReviewer.parameters,
-    speedRating: SQUAD_MEMBERS.uiReviewer.speedRating,
-    description: SQUAD_MEMBERS.uiReviewer.description,
-    strengths: SQUAD_MEMBERS.uiReviewer.strengths,
-    provider: 'custom' as const,
-  },
-  {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nvidia/nemotron-3-super-120b-a12b',
-    category: 'Flagship Reasoning & Coding' as const,
-    roleInSquad: 'Deep Logic' as any,
-    parameters: '120B MoE (NVIDIA NIM)',
-    speedRating: 'Frontier 120B Reasoning & Code Synthesis',
-    description: 'NVIDIA Nemotron 3 Super 120B: Ultra-large 120B parameters model built for deep multi-step reasoning, simultaneous code understanding & generation, and live URL website deconstruction/cloning.',
-    strengths: ['120B Super Reasoning', 'Dual Code Comprehension & Writing', 'URL Website Cloning Engine', 'Complex Logic & Math'],
-    provider: 'nvidia' as const,
-  },
-];
 
 // ==========================================
 // 1. NATIVE TOOL ACCESS & EXECUTION LAYER
@@ -324,10 +230,7 @@ export async function execute_bash_command(cmd: string, timeoutMs = 30000): Prom
       const durationMs = Date.now() - start;
       const stdoutStr = stdout ? stdout.toString() : '';
       const stderrStr = stderr ? stderr.toString() : (error ? error.message : '');
-      // `error` is only set when the command truly failed (non-zero exit, signal or
-      // timeout), so trust it. The previous heuristic (`stderr && !stdout -> 1`)
-      // marked successful commands that merely logged warnings as failures.
-      const exitCode = error ? (typeof error.code === 'number' ? error.code : 1) : 0;
+      const exitCode = error && error.code !== undefined ? error.code : (stderrStr && !stdoutStr ? 1 : 0);
       resolve({
         success: exitCode === 0,
         stdout: stdoutStr,
@@ -343,48 +246,22 @@ export async function execute_bash_command(cmd: string, timeoutMs = 30000): Prom
  * 2. run_pip_installer: Python libraries install karne ke liye
  */
 export async function run_pip_installer(packageName: string): Promise<ToolExecutionResult> {
-  const cleanPkg = (packageName || '').trim().replace(/['"`;&$|\n\r]/g, '');
-  if (!cleanPkg) {
-    return {
-      success: false,
-      stdout: '',
-      stderr: 'run_pip_installer requires a package name',
-      exitCode: 1,
-      durationMs: 0,
-    };
-  }
-
-  // pip < 23 rejects `--break-system-packages` outright while PEP 668 environments
-  // reject the flagless form, so try plain first and only add flags on the matching
-  // error instead of hardcoding a flag that breaks one of the two.
-  const installArgs = `-m pip install --disable-pip-version-check ${cleanPkg}`;
-  let res = await execute_bash_command(`python3 ${installArgs}`, 180000);
-
-  if (!res.success && /externally-managed-environment|externally managed/i.test(res.stderr)) {
-    res = await execute_bash_command(`python3 ${installArgs} --break-system-packages`, 180000);
-  }
-  if (!res.success && /permission denied|not writable|EACCES/i.test(res.stderr)) {
-    res = await execute_bash_command(`python3 ${installArgs} --user`, 180000);
-  }
-
-  // Verify through distribution metadata because the pip name and the import name
-  // differ for real packages (beautifulsoup4 -> bs4, PyYAML -> yaml). Importing the
-  // raw pip name marked those installs unverified even when they had succeeded.
-  const distribution = cleanPkg.split(/[<>=!~\[]/)[0].trim();
-  const verifyCmd =
-    `python3 -c "import importlib.metadata as m; m.version('${distribution}'); print('Package verified')"` +
-    ` || python3 -c "import ${distribution.replace(/-/g, '_')}; print('Package verified')"`;
-  const verifyRes = await execute_bash_command(verifyCmd, 30000);
-  const isVerified = verifyRes.success && verifyRes.stdout.includes('Package verified');
+  const cleanPkg = packageName.trim().replace(/['";&$|]/g, '');
+  const cmd = `python3 -m pip install --break-system-packages ${cleanPkg} || pip3 install ${cleanPkg}`;
+  const res = await execute_bash_command(cmd, 60000);
+  
+  // Verify package installation
+  const verifyRes = await execute_bash_command(`python3 -c "import ${cleanPkg.split(/[>=<]/)[0]}; print('Package verified')"`).catch(() => null);
+  const isVerified = verifyRes && verifyRes.stdout.includes('Package verified');
 
   return {
-    success: res.success || isVerified,
-    stdout: res.stdout || (isVerified ? `Successfully verified ${distribution} is installed.` : ''),
+    success: res.success || Boolean(isVerified),
+    stdout: res.stdout || (isVerified ? `Successfully verified ${cleanPkg} is installed.` : ''),
     stderr: isVerified ? '' : res.stderr,
     exitCode: isVerified ? 0 : res.exitCode,
     durationMs: res.durationMs,
     data: {
-      package: distribution,
+      package: cleanPkg,
       verified: isVerified,
     },
   };
@@ -694,24 +571,20 @@ export async function create_and_register_custom_tool(params: {
     fs.mkdirSync(toolsDir, { recursive: true });
   }
   const filePath = path.join(toolsDir, `${safeName}.${ext}`);
-  // Validate in a scratch file before touching the real path, so a rejected build
-  // never leaves a broken script on disk nor clobbers a previously working tool of
-  // the same name (re-creating a tool replaces the old one by design).
-  const stagingPath = `${filePath}.staging-${Date.now()}`;
   
   try {
-    fs.writeFileSync(stagingPath, code, 'utf-8');
+    fs.writeFileSync(filePath, code, 'utf-8');
+    fs.chmodSync(filePath, 0o755);
     
     // Quick syntax validation test
     let testRes: ToolExecutionResult;
     if (language === 'bash') {
-      testRes = await execute_bash_command(`bash -n "${stagingPath}"`);
+      testRes = await execute_bash_command(`bash -n "${filePath}"`);
     } else {
-      testRes = await execute_bash_command(`python3 -m py_compile "${stagingPath}"`);
+      testRes = await execute_bash_command(`python3 -m py_compile "${filePath}"`);
     }
     
     if (!testRes.success) {
-      try { fs.unlinkSync(stagingPath); } catch {}
       return {
         success: false,
         stdout: '',
@@ -720,10 +593,6 @@ export async function create_and_register_custom_tool(params: {
         durationMs: testRes.durationMs,
       };
     }
-
-    // Promote the validated build into place.
-    fs.renameSync(stagingPath, filePath);
-    fs.chmodSync(filePath, 0o755);
     
     REGISTERED_CUSTOM_TOOLS.set(safeName, {
       name: safeName,
@@ -768,20 +637,16 @@ export async function self_modify_tool(params: {
   const shPath = path.join(toolsDir, `${safeName}.sh`);
   const targetPath = fs.existsSync(pyPath) ? pyPath : (fs.existsSync(shPath) ? shPath : pyPath);
   
-  // Same staging rule as tool creation: a self-modification that fails syntax
-  // validation must never overwrite the working version of the tool.
-  const selfModifyStagingPath = `${targetPath}.staging-${Date.now()}`;
-
   try {
-    fs.writeFileSync(selfModifyStagingPath, new_code, 'utf-8');
+    fs.writeFileSync(targetPath, new_code, 'utf-8');
+    fs.chmodSync(targetPath, 0o755);
     
     const isPython = targetPath.endsWith('.py');
     const testRes = isPython
-      ? await execute_bash_command(`python3 -m py_compile "${selfModifyStagingPath}"`)
-      : await execute_bash_command(`bash -n "${selfModifyStagingPath}"`);
+      ? await execute_bash_command(`python3 -m py_compile "${targetPath}"`)
+      : await execute_bash_command(`bash -n "${targetPath}"`);
       
     if (!testRes.success) {
-      try { fs.unlinkSync(selfModifyStagingPath); } catch {}
       return {
         success: false,
         stdout: '',
@@ -790,10 +655,6 @@ export async function self_modify_tool(params: {
         durationMs: testRes.durationMs,
       };
     }
-
-    // Promote the validated build into place (POSIX rename replaces atomically).
-    fs.renameSync(selfModifyStagingPath, targetPath);
-    fs.chmodSync(targetPath, 0o755);
     
     const existing = REGISTERED_CUSTOM_TOOLS.get(safeName);
     REGISTERED_CUSTOM_TOOLS.set(safeName, {
@@ -856,10 +717,10 @@ export async function execute_custom_tool(params: {
 }
 
 // ==========================================
-// 2. INTER-MODEL COLLABORATIVE PIPELINE & REACT LOOP
+// 2. AUTONOMOUS TOOL PIPELINE & REACT LOOP
 // ==========================================
 
-export type SquadToolType =
+export type AgentToolType =
   | 'execute_bash_command'
   | 'run_pip_installer'
   | 'run_python_script'
@@ -873,39 +734,41 @@ export type SquadToolType =
 export interface AgenticExecutionPlan {
   plan: string;
   steps: string[];
-  delegation: 'laguna' | 'deepseek' | 'minimax' | 'all';
+  delegation: 'tools' | 'code' | 'review' | 'all';
   tools_required: string[];
   actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }>;
 }
 
 export interface PipelineExecutionOutcome {
+  /**
+   * Every stage below is executed by the SAME engine (custom-llm). Stages are
+   * named for what they do, not for a model - there is only one model.
+   */
   pipeline: {
-    orchestrator: {
-      model: string;
-      role: string;
+    planner?: {
+      engine: string;
+      stage: string;
       plan: string;
       steps: string[];
-      delegatedTo: string;
     };
-    executionMaster?: {
-      model: string;
-      role: string;
+    toolExecutor?: {
+      engine: string;
+      stage: string;
       actionSummary: string;
       selfCorrectionLoops: number;
       success: boolean;
     };
-    deepReasoner?: {
-      model: string;
-      role: string;
-      codeArchitecture?: string;
+    coder?: {
+      engine: string;
+      stage: string;
       summary?: string;
     };
     reviewer?: {
-      model: string;
-      role: string;
+      engine: string;
+      stage: string;
       syntaxScore: number;
       passedReview: boolean;
       fixesApplied: string[];
@@ -913,7 +776,7 @@ export interface PipelineExecutionOutcome {
   };
   toolCalls: Array<{
     id: string;
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
     result: ToolExecutionResult;
     selfCorrectionAttempts: number;
@@ -936,7 +799,7 @@ export interface PipelineExecutionOutcome {
  * Executes a tool with autonomous self-correction loop (up to 3 iterations)
  */
 export async function executeToolWithSelfCorrection(
-  tool: SquadToolType,
+  tool: AgentToolType,
   initialArgs: Record<string, any>,
   maxAttempts = 3
 ): Promise<{ result: ToolExecutionResult; attempts: number; correctedWith?: string }> {
@@ -953,7 +816,7 @@ export async function executeToolWithSelfCorrection(
 
   while (attempts < maxAttempts) {
     attempts++;
-    console.log(`[Laguna ReAct Loop] Iteration ${attempts}/${maxAttempts} for ${tool}:`, currentArgs);
+    console.log(`[Halye ReAct Loop] Iteration ${attempts}/${maxAttempts} for ${tool}:`, currentArgs);
 
     if (tool === 'execute_bash_command') {
       lastResult = await execute_bash_command(currentArgs.cmd);
@@ -977,11 +840,11 @@ export async function executeToolWithSelfCorrection(
     }
 
     if (lastResult.success) {
-      console.log(`[Laguna ReAct Loop] Succeeded on attempt ${attempts} for ${tool}`);
+      console.log(`[Halye ReAct Loop] Succeeded on attempt ${attempts} for ${tool}`);
       break;
     }
 
-    console.warn(`[Laguna ReAct Loop] Failed on attempt ${attempts}. Stderr: ${lastResult.stderr}`);
+    console.warn(`[Halye ReAct Loop] Failed on attempt ${attempts}. Stderr: ${lastResult.stderr}`);
 
     // Self-healing / correction logic based on stderr:
     if (attempts < maxAttempts) {
@@ -1033,18 +896,18 @@ export async function executeToolWithSelfCorrection(
 /**
  * Parses user prompt to determine if planning and tool execution are needed
  */
-export function analyzeUserIntentForSquad(prompt: string): {
+export function analyzeUserIntent(prompt: string): {
   needsTools: boolean;
   needsFullCode: boolean;
   needsPlaywright: boolean;
   actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }>;
 } {
   const lower = prompt.toLowerCase();
   const actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }> = [];
 
@@ -1118,7 +981,7 @@ export function analyzeUserIntentForSquad(prompt: string): {
       args: {
         name: 'autonomous_self_healer',
         language: 'python',
-        description: 'Autonomous runtime tool builder and self-modification engine for Halye Squad.',
+        description: 'Autonomous runtime tool builder and self-modification engine for the Halye agent.',
         code: `#!/usr/bin/env python3
 import sys, os, time, platform
 
@@ -1199,9 +1062,9 @@ if __name__ == "__main__":
 }
 
 /**
- * MiniMax M3 Rapid Syntax & HTML Sanity Check
+ * Rapid syntax & HTML sanity check for generated code.
  */
-export function miniMaxSyntaxReview(code: string): {
+export function reviewGeneratedCode(code: string): {
   syntaxScore: number;
   passedReview: boolean;
   fixesApplied: string[];

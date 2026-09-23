@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Paperclip,
   Cpu,
   Palette,
-  Zap
 } from 'lucide-react';
 import { HalyeStudio } from './components/HalyeStudio';
 import { AttachedAssetsModal, AttachedAsset } from './components/AttachedAssetsModal';
 import { GithubModal } from './components/GithubModal';
 import { LangChainAdminModal } from './components/LangChainAdminModal';
 import { SelfUpdatePanel } from './components/SelfUpdatePanel';
-import { QwenEndpointModal } from './components/QwenEndpointModal';
+import { CustomModelPanel } from './components/CustomModelPanel';
 import { ProjectProgressTracker } from './components/ProjectProgressTracker';
 import { ProjectScope } from './types';
 
@@ -70,8 +69,7 @@ export default function App() {
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
   const [isLangChainOpen, setIsLangChainOpen] = useState(false);
   const [isSelfUpdateOpen, setIsSelfUpdateOpen] = useState(false);
-  const [isQwenEndpointOpen, setIsQwenEndpointOpen] = useState(false);
-  const [qwenEndpointStatus, setQwenEndpointStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [isCustomModelOpen, setIsCustomModelOpen] = useState(false);
   const [builderCode, setBuilderCode] = useState<string | undefined>(undefined);
   const [connectedRepo, setConnectedRepo] = useState<string | undefined>(undefined);
   const [attachedAssetsCount, setAttachedAssetsCount] = useState<number>(1);
@@ -93,23 +91,6 @@ export default function App() {
       localStorage.setItem('halye_project_scope', JSON.stringify(projectScope));
     } catch (e) {}
   }, [projectScope]);
-
-  const refreshQwenStatus = () => {
-    fetch('/api/custom-endpoint/status')
-      .then((r) => r.json())
-      .then((data) => {
-        setQwenEndpointStatus(data?.online ? 'online' : 'offline');
-      })
-      .catch(() => {
-        setQwenEndpointStatus('offline');
-      });
-  };
-
-  useEffect(() => {
-    refreshQwenStatus();
-    const interval = setInterval(refreshQwenStatus, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
   // When user imports code from GitHub or rebuilds from an Attached Asset
   const handleLoadCodeIntoBuilder = (code: string) => {
@@ -150,25 +131,6 @@ export default function App() {
         {/* Right: Attached Assets & LangChain Superuser Admin */}
         <div className="flex items-center gap-2 shrink-0">
           <button
-            id="header-qwen-endpoint-btn"
-            onClick={() => setIsQwenEndpointOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
-            title="Qwen 3 27B Uncensored Endpoint Settings & Status"
-          >
-            <span className="text-sm">👑</span>
-            <span className="hidden sm:inline">Qwen Endpoint</span>
-            <span
-              className={`w-2 h-2 rounded-full ${
-                qwenEndpointStatus === 'online'
-                  ? 'bg-emerald-400'
-                  : qwenEndpointStatus === 'offline'
-                  ? 'bg-red-400 animate-pulse'
-                  : 'bg-amber-400'
-              }`}
-            ></span>
-          </button>
-
-          <button
             id="header-langchain-admin-btn"
             onClick={() => setIsLangChainOpen(true)}
             className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
@@ -187,6 +149,16 @@ export default function App() {
           >
             <Palette className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Self Update</span>
+          </button>
+
+          <button
+            id="header-custom-model-btn"
+            onClick={() => setIsCustomModelOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            title="Custom Model Panel - add/remove/replace any local or self-hosted model"
+          >
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Models</span>
           </button>
 
           <button
@@ -255,14 +227,11 @@ export default function App() {
         onClose={() => setIsSelfUpdateOpen(false)}
       />
 
-      <QwenEndpointModal
-        isOpen={isQwenEndpointOpen}
-        onClose={() => {
-          setIsQwenEndpointOpen(false);
-          refreshQwenStatus();
-        }}
-        onStatusChange={(status) => setQwenEndpointStatus(status)}
+      <CustomModelPanel
+        isOpen={isCustomModelOpen}
+        onClose={() => setIsCustomModelOpen(false)}
       />
+
     </div>
   );
 }

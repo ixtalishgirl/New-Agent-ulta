@@ -7,6 +7,7 @@ and outputs pure JSON with thoughts, actions, intermediate steps, and memory sta
 import sys
 import json
 import os
+import time
 
 # Ensure current working directory and module parent is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +18,11 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from langchain_agent.agent import agent_brain
+from langchain_agent.custom_llm import (
+    is_configured as custom_llm_is_configured,
+    get_config as custom_llm_get_config,
+    query_custom_llm,
+)
 
 def main():
     try:
@@ -67,15 +73,44 @@ def main():
             
         elif action == "status":
             mem = agent_brain.get_memory_state()
+            custom_cfg = custom_llm_get_config()
             status = {
                 "status": "online",
                 "model_engine": agent_brain.model_type,
+                "uses_custom_llm": getattr(agent_brain, "uses_custom_llm", False),
+                "last_executor_error": getattr(agent_brain, "last_executor_error", None),
+                "custom_llm": {
+                    "configured": custom_cfg["configured"],
+                    "url": custom_cfg["url"],
+                    "max_tokens": custom_cfg["max_tokens"],
+                    "timeout_seconds": custom_cfg["timeout"],
+                },
                 "memory_turns": len(mem),
                 "tools_count": len(agent_brain.tools),
                 "tools": [t.name for t in agent_brain.tools],
                 "admin_access": "RAW_SUPERUSER"
             }
             print(json.dumps(status))
+
+        elif action == "test_custom_llm":
+            prompt = data.get("prompt", "Reply with exactly: PONG")
+            started = time.time()
+            try:
+                reply = query_custom_llm(prompt, max_tokens=128)
+                print(json.dumps({
+                    "success": True,
+                    "configured": custom_llm_is_configured(),
+                    "url": custom_llm_get_config()["url"],
+                    "prompt": prompt,
+                    "response": reply,
+                    "latency_ms": int((time.time() - started) * 1000),
+                }))
+            except Exception as custom_err:
+                print(json.dumps({
+                    "success": False,
+                    "error": str(custom_err),
+                    "latency_ms": int((time.time() - started) * 1000),
+                }))
             
         else:
             print(json.dumps({"success": False, "error": f"Unknown action: {action}"}))
