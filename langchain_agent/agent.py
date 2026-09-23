@@ -45,6 +45,17 @@ from langchain_agent.tools import (
     terminal_command_executor
 )
 
+# Self-hosted inference engine (FastAPI + ngrok Mistral-Nemo-12B).
+# When this endpoint is configured it replaces the simulated brain below and
+# becomes the model that actually reasons inside the AgentExecutor.
+from langchain_agent.custom_llm import (
+    CustomLLMChatModel,
+    is_configured as custom_llm_is_configured,
+    get_config as custom_llm_get_config,
+    query_custom_llm,
+    LANGCHAIN_AVAILABLE as CUSTOM_LLM_LANGCHAIN_AVAILABLE,
+)
+
 
 if LANGCHAIN_AVAILABLE:
     class VerboseTelemetryCallbackHandler(BaseCallbackHandler):
@@ -240,6 +251,8 @@ class HalyeAgentBrain:
     """Singleton engine managing the LangChain Agent, Tool Arsenal, and Conversation Memory."""
     def __init__(self):
         self.model_type = "HalyeAutonomousChatModel (LangChain Agentic Brain)"
+        self.uses_custom_llm = False
+        self.last_executor_error: Optional[str] = None
         self.tools = list(ALL_AGENT_TOOLS)
         self.recent_execution_history: List[Dict[str, Any]] = []
         self.memory_buffer: List[Dict[str, str]] = []
@@ -262,7 +275,29 @@ class HalyeAgentBrain:
         if not LANGCHAIN_AVAILABLE:
             return
             
-        llm = HalyeAutonomousChatModel()
+        # Prefer the self-hosted custom endpoint as the real brain whenever it is
+        # configured. The simulated model stays as the offline fallback so the
+        # agent still functions when the tunnel is asleep.
+        llm = None
+        if custom_llm_is_configured() and CUSTOM_LLM_LANGCHAIN_AVAILABLE:
+            try:
+                custom_config = custom_llm_get_config()
+                llm = CustomLLMChatModel()
+                self.model_type = "CustomLLMChatModel (Mistral-Nemo-12B @ FastAPI/ngrok endpoint)"
+                self.uses_custom_llm = True
+                logger.info(
+                    "Custom LLM engine active: %s (max_tokens=%s, timeout=%ss)",
+                    custom_config["url"], custom_config["max_tokens"], custom_config["timeout"],
+                )
+            except Exception as custom_err:
+                logger.warning("Custom LLM engine unavailable (%s). Using simulated brain.", custom_err)
+                llm = None
+
+        if llm is None:
+            llm = HalyeAutonomousChatModel()
+            self.model_type = "HalyeAutonomousChatModel (LangChain Agentic Brain)"
+            self.uses_custom_llm = False
+
         system_prompt = (
             "You are Halye Agentic Brain, an autonomous engineering intelligence and administrative AI agent.\n"
             "You have direct access to an autonomous tool arsenal:\n"
@@ -294,7 +329,10 @@ class HalyeAgentBrain:
             handle_parsing_errors=True,
             max_iterations=10,
         )
-        logger.info("AgentExecutor initialized with verbose=True and ConversationBufferMemory")
+        logger.info(
+            "AgentExecutor initialized with verbose=True and ConversationBufferMemory (engine=%s)",
+            self.model_type,
+        )
 
     def run(self, prompt_text: str, framework: str = "tool_calling") -> Dict[str, Any]:
         """
@@ -355,6 +393,9 @@ class HalyeAgentBrain:
                 return run_summary
                 
             except Exception as e:
+                # Record the failure instead of swallowing it: a dead ngrok tunnel must
+                # be visible to the caller, not silently masked by the fallback engine.
+                self.last_executor_error = str(e)
                 logger.error(f"LangChain executor invocation error: {e}", exc_info=True)
 
         # Autonomous Agent Engine Execution (deterministic tool-calling with full step tracking)

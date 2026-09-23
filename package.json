@@ -14,11 +14,13 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "lucide-react": "^1.40.0",
+    "playwright": "^1.63.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.9",
+    "@types/bun": "^1.4.2",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.5",

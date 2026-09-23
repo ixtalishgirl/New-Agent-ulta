@@ -1,138 +1,44 @@
 /**
- * Master Architecture: Multi-Model Agentic Pipeline with Real Model Inference
- * Real Models:
- * 1. Primary Brain / Orchestrator: meta/llama-3.3-70b-instruct (Meta AI)
- * 2. Agentic Execution & Terminal Master: qwen/qwen2.5-coder-32b-instruct (Alibaba Cloud)
- * 3. Massive Reasoning & Deep Logic: deepseek-ai/deepseek-r1 (DeepSeek AI)
- * 4. UI & Rapid Syntax Fixes: mistralai/mixtral-8x22b-instruct-v0.1 (Mistral AI)
+ * Master Architecture: Autonomous Tool Layer for the single self-hosted engine.
+ *
+ * The agent runs on ONE model: the self-hosted Mistral-Nemo-12B endpoint served
+ * by FastAPI + ngrok (see server.ts -> CUSTOM_LLM_DEFAULT_URL). No cloud model is
+ * configured or selected anywhere in this codebase, so everything here is tool
+ * execution, intent analysis and code review - not model routing.
  */
 
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-export interface ModelSquadMember {
-  id: string;
-  name: string;
-  role: 'Orchestrator' | 'Terminal Master' | 'Deep Logic' | 'UI & Rapid Fixes';
-  provider: 'nvidia' | 'openrouter' | 'gemini';
-  parameters: string;
-  speedRating: string;
-  description: string;
-  strengths: string[];
-}
-
-export const SQUAD_MEMBERS: Record<string, ModelSquadMember> = {
-  orchestrator: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (NVIDIA 120B Super Core)',
-    role: 'Orchestrator',
-    provider: 'nvidia',
-    parameters: '120 Billion Super Tensor A12B (NVIDIA)',
-    speedRating: 'Sovereign God Mode',
-    description: '120B parameter neural core with parallel batch execution, dynamic FP8/INT4 KV-cache quantization, and logits refusal suppression.',
-    strengths: ['120B Super Tensor Core', 'Uncensored Logits Bias Override', 'Greedy Decoding Matrix', 'Autonomous Tool Execution'],
-  },
-  terminalMaster: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Sovereign Terminal)',
-    role: 'Terminal Master',
-    provider: 'nvidia',
-    parameters: '120B A12B (NVIDIA)',
-    speedRating: 'Fast Agentic Loop',
-    description: 'Autonomous Linux execution engine powered by Nemotron-3 Super 120B.',
-    strengths: ['Autonomous Linux Bash', 'Terminal Execution', 'Pip Automation', 'Self-Correction Loop'],
-  },
-  deepLogic: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Super Logic & Code)',
-    role: 'Deep Logic',
-    provider: 'nvidia',
-    parameters: '120B Parameter Neural Core',
-    speedRating: 'Zero Probabilistic Drift',
-    description: 'Deterministic code synthesis and deep reasoning with greedy decoding matrix (temperature=0.01).',
-    strengths: ['Greedy Decoding Matrix', 'Full Standalone App Synthesis', 'Advanced Algorithms', 'Flawless Code Logic'],
-  },
-  uiReviewer: {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nemotron-3-super-120b-a12b (120B Sovereign Auditor)',
-    role: 'UI & Rapid Fixes',
-    provider: 'nvidia',
-    parameters: '120B Multimodal Core',
-    speedRating: 'Matrix Verification',
-    description: 'Syntax audit and layout inspection via Nemotron 120B tensor space.',
-    strengths: ['Multimodal Vision Review', 'DOM & Tailwind Syntax Audit', 'AMOLED Layout Perfection', 'Tool-calling QA'],
-  },
+/**
+ * Descriptor of the one engine this project runs on. Kept in a single place so
+ * the catalog, the API schema and the UI all describe the same brain.
+ */
+export const CUSTOM_LLM_ENGINE = {
+  id: 'custom-llm',
+  name: 'Custom LLM - Mistral-Nemo-12B (Self-Hosted)',
+  provider: 'custom' as const,
+  endpoint: 'https://pancreas-smashing-breeching.ngrok-free.dev/generate',
+  parameters: '12B Mistral-Nemo (Kaggle T4, FastAPI + ngrok)',
+  speedRating: 'Live self-hosted inference',
+  description:
+    'Your own uncensored Mistral-Nemo-12B served over a FastAPI + ngrok endpoint. ' +
+    'It is the only inference engine this agent uses: chat, code generation, tool planning and reviews all run through it.',
+  strengths: [
+    'Self-hosted: no cloud keys, no provider quotas',
+    'Drives every autonomous tool (bash, python, playwright, web search)',
+    'Tool calls are parsed from its JSON replies by the agent executor',
+  ],
+  capabilities: [
+    'execute_bash_command',
+    'run_pip_installer',
+    'run_python_script',
+    'trigger_playwright_automation',
+    'web_search',
+    'create_and_register_custom_tool',
+  ],
 };
-
-export const SQUAD_CATALOG_ITEMS = [
-  {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'NVIDIA Nemotron-3 Super 120B A12B (Sovereign Core)',
-    category: '120B Super Neural Core' as const,
-    roleInSquad: 'Primary Brain & Autonomous God Mode' as any,
-    parameters: '120B Super Tensor • FP8 Dynamic KV-Cache',
-    speedRating: 'Sub-100ms Deterministic Execution',
-    description: 'Flagship 120B neural core running Asynchronous Parallel Batch Execution, dynamic FP8/INT4 KV-Cache quantization, logits processor refusal suppression, and greedy decoding matrix.',
-    strengths: ['120B Super Tensor Parameters', 'Uncensored Refusal Logits Suppression', 'Greedy Decoding (Temp=0.01)', 'Autonomous Web Scraping & DDGS Intelligence'],
-    provider: 'nvidia' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.orchestrator.id,
-    name: SQUAD_MEMBERS.orchestrator.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.orchestrator.role,
-    parameters: SQUAD_MEMBERS.orchestrator.parameters,
-    speedRating: SQUAD_MEMBERS.orchestrator.speedRating,
-    description: SQUAD_MEMBERS.orchestrator.description,
-    strengths: SQUAD_MEMBERS.orchestrator.strengths,
-    provider: 'nvidia' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.terminalMaster.id,
-    name: SQUAD_MEMBERS.terminalMaster.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.terminalMaster.role,
-    parameters: SQUAD_MEMBERS.terminalMaster.parameters,
-    speedRating: SQUAD_MEMBERS.terminalMaster.speedRating,
-    description: SQUAD_MEMBERS.terminalMaster.description,
-    strengths: SQUAD_MEMBERS.terminalMaster.strengths,
-    provider: 'nvidia' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.deepLogic.id,
-    name: SQUAD_MEMBERS.deepLogic.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.deepLogic.role,
-    parameters: SQUAD_MEMBERS.deepLogic.parameters,
-    speedRating: SQUAD_MEMBERS.deepLogic.speedRating,
-    description: SQUAD_MEMBERS.deepLogic.description,
-    strengths: SQUAD_MEMBERS.deepLogic.strengths,
-    provider: 'nvidia' as const,
-  },
-  {
-    id: SQUAD_MEMBERS.uiReviewer.id,
-    name: SQUAD_MEMBERS.uiReviewer.name,
-    category: '4-Model Squad (Ensemble)' as const,
-    roleInSquad: SQUAD_MEMBERS.uiReviewer.role,
-    parameters: SQUAD_MEMBERS.uiReviewer.parameters,
-    speedRating: SQUAD_MEMBERS.uiReviewer.speedRating,
-    description: SQUAD_MEMBERS.uiReviewer.description,
-    strengths: SQUAD_MEMBERS.uiReviewer.strengths,
-    provider: 'nvidia' as const,
-  },
-  {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'nvidia/nemotron-3-super-120b-a12b',
-    category: 'Flagship Reasoning & Coding' as const,
-    roleInSquad: 'Deep Logic' as any,
-    parameters: '120B MoE (NVIDIA NIM)',
-    speedRating: 'Frontier 120B Reasoning & Code Synthesis',
-    description: 'NVIDIA Nemotron 3 Super 120B: Ultra-large 120B parameters model built for deep multi-step reasoning, simultaneous code understanding & generation, and live URL website deconstruction/cloning.',
-    strengths: ['120B Super Reasoning', 'Dual Code Comprehension & Writing', 'URL Website Cloning Engine', 'Complex Logic & Math'],
-    provider: 'nvidia' as const,
-  },
-];
 
 // ==========================================
 // 1. NATIVE TOOL ACCESS & EXECUTION LAYER
@@ -811,10 +717,10 @@ export async function execute_custom_tool(params: {
 }
 
 // ==========================================
-// 2. INTER-MODEL COLLABORATIVE PIPELINE & REACT LOOP
+// 2. AUTONOMOUS TOOL PIPELINE & REACT LOOP
 // ==========================================
 
-export type SquadToolType =
+export type AgentToolType =
   | 'execute_bash_command'
   | 'run_pip_installer'
   | 'run_python_script'
@@ -828,39 +734,41 @@ export type SquadToolType =
 export interface AgenticExecutionPlan {
   plan: string;
   steps: string[];
-  delegation: 'laguna' | 'deepseek' | 'minimax' | 'all';
+  delegation: 'tools' | 'code' | 'review' | 'all';
   tools_required: string[];
   actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }>;
 }
 
 export interface PipelineExecutionOutcome {
+  /**
+   * Every stage below is executed by the SAME engine (custom-llm). Stages are
+   * named for what they do, not for a model - there is only one model.
+   */
   pipeline: {
-    orchestrator: {
-      model: string;
-      role: string;
+    planner?: {
+      engine: string;
+      stage: string;
       plan: string;
       steps: string[];
-      delegatedTo: string;
     };
-    executionMaster?: {
-      model: string;
-      role: string;
+    toolExecutor?: {
+      engine: string;
+      stage: string;
       actionSummary: string;
       selfCorrectionLoops: number;
       success: boolean;
     };
-    deepReasoner?: {
-      model: string;
-      role: string;
-      codeArchitecture?: string;
+    coder?: {
+      engine: string;
+      stage: string;
       summary?: string;
     };
     reviewer?: {
-      model: string;
-      role: string;
+      engine: string;
+      stage: string;
       syntaxScore: number;
       passedReview: boolean;
       fixesApplied: string[];
@@ -868,7 +776,7 @@ export interface PipelineExecutionOutcome {
   };
   toolCalls: Array<{
     id: string;
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
     result: ToolExecutionResult;
     selfCorrectionAttempts: number;
@@ -891,7 +799,7 @@ export interface PipelineExecutionOutcome {
  * Executes a tool with autonomous self-correction loop (up to 3 iterations)
  */
 export async function executeToolWithSelfCorrection(
-  tool: SquadToolType,
+  tool: AgentToolType,
   initialArgs: Record<string, any>,
   maxAttempts = 3
 ): Promise<{ result: ToolExecutionResult; attempts: number; correctedWith?: string }> {
@@ -908,7 +816,7 @@ export async function executeToolWithSelfCorrection(
 
   while (attempts < maxAttempts) {
     attempts++;
-    console.log(`[Laguna ReAct Loop] Iteration ${attempts}/${maxAttempts} for ${tool}:`, currentArgs);
+    console.log(`[Halye ReAct Loop] Iteration ${attempts}/${maxAttempts} for ${tool}:`, currentArgs);
 
     if (tool === 'execute_bash_command') {
       lastResult = await execute_bash_command(currentArgs.cmd);
@@ -932,11 +840,11 @@ export async function executeToolWithSelfCorrection(
     }
 
     if (lastResult.success) {
-      console.log(`[Laguna ReAct Loop] Succeeded on attempt ${attempts} for ${tool}`);
+      console.log(`[Halye ReAct Loop] Succeeded on attempt ${attempts} for ${tool}`);
       break;
     }
 
-    console.warn(`[Laguna ReAct Loop] Failed on attempt ${attempts}. Stderr: ${lastResult.stderr}`);
+    console.warn(`[Halye ReAct Loop] Failed on attempt ${attempts}. Stderr: ${lastResult.stderr}`);
 
     // Self-healing / correction logic based on stderr:
     if (attempts < maxAttempts) {
@@ -988,18 +896,18 @@ export async function executeToolWithSelfCorrection(
 /**
  * Parses user prompt to determine if planning and tool execution are needed
  */
-export function analyzeUserIntentForSquad(prompt: string): {
+export function analyzeUserIntent(prompt: string): {
   needsTools: boolean;
   needsFullCode: boolean;
   needsPlaywright: boolean;
   actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }>;
 } {
   const lower = prompt.toLowerCase();
   const actions: Array<{
-    tool: SquadToolType;
+    tool: AgentToolType;
     args: Record<string, any>;
   }> = [];
 
@@ -1073,7 +981,7 @@ export function analyzeUserIntentForSquad(prompt: string): {
       args: {
         name: 'autonomous_self_healer',
         language: 'python',
-        description: 'Autonomous runtime tool builder and self-modification engine for Halye Squad.',
+        description: 'Autonomous runtime tool builder and self-modification engine for the Halye agent.',
         code: `#!/usr/bin/env python3
 import sys, os, time, platform
 
@@ -1154,9 +1062,9 @@ if __name__ == "__main__":
 }
 
 /**
- * MiniMax M3 Rapid Syntax & HTML Sanity Check
+ * Rapid syntax & HTML sanity check for generated code.
  */
-export function miniMaxSyntaxReview(code: string): {
+export function reviewGeneratedCode(code: string): {
   syntaxScore: number;
   passedReview: boolean;
   fixesApplied: string[];
