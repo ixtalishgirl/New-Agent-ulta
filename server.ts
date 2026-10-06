@@ -67,7 +67,47 @@ if (!process.env.PATH?.includes('/usr/local/bin')) {
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));// ---------------------------------------------------------------------------
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
+// ---------------------------------------------------------------------------
+// Password gate (APP_PASSWORD).
+// If APP_PASSWORD is set, every route except /api/health and /api/auth requires
+// it. Browser visitors get a minimal login page; API clients send the
+// x-app-password header (or ?password= query). If APP_PASSWORD is unset,
+// everything is open (local dev).
+// ---------------------------------------------------------------------------
+const APP_PASSWORD = (process.env.APP_PASSWORD || '').trim();
+
+function isAuthed(req: any): boolean {
+  if (!APP_PASSWORD) return true;
+  if (req.headers['x-app-password'] === APP_PASSWORD) return true;
+  if (typeof req.query?.password === 'string' && req.query.password === APP_PASSWORD) return true;
+  const cookie = String(req.headers.cookie || '');
+  if (cookie.split(';').some((c: string) => c.trim() === `halye_auth=${APP_PASSWORD}`)) return true;
+  return false;
+}
+
+const PASSWORD_PAGE = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halye AI Assistant</title></head><body style="background:#000;color:#e4e4e7;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><form method="POST" action="/api/auth" style="text-align:center"><h2>\uD83C\uDF19 Halye AI Assistant</h2><p>Password required</p><input type="password" name="password" autofocus style="padding:10px;font-size:16px;border-radius:8px;border:1px solid #333;background:#111;color:#fff"/><br><br><button type="submit" style="padding:10px 28px;font-size:16px;border-radius:8px;background:#06b6d4;border:none;color:#000;font-weight:bold">Enter</button></form></body></html>`;
+
+app.post('/api/auth', (req: any, res: any) => {
+  const pw = String(req.body?.password || '');
+  if (APP_PASSWORD && pw === APP_PASSWORD) {
+    res.cookie('halye_auth', APP_PASSWORD, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 });
+    return res.redirect('/');
+  }
+  return res.status(401).send('Wrong password');
+});
+
+app.use((req: any, res: any, next: any) => {
+  if (req.path === '/api/health' || req.path === '/api/auth') return next();
+  if (isAuthed(req)) return next();
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ success: false, error: 'APP_PASSWORD required' });
+  }
+  return res.status(401).send(PASSWORD_PAGE);
+});
+
+// ---------------------------------------------------------------------------
 // Python tool-runtime bootstrap
 // The platform install step is Node-only, so LangChain / Playwright / bs4 are not
 // present in a fresh sandbox and every Python-backed tool silently fails. Kick the
@@ -286,7 +326,7 @@ app.post('/api/models/local/test', async (req, res) => {
 app.post('/api/custom-llm/test', async (req, res) => {
   const cfg = getCustomLlmConfig();
   if (!cfg.configured) {
-    return res.status(400).json({ success: false, error: 'CUSTOM_LLM_API_URL is not configured.' });
+    return res.status(400).json({ success: false, error: 'HALEY_API_URL is not configured.' });
   }
   const prompt = String(req.body?.prompt || 'Reply with exactly: PONG').slice(0, 4000);
   const startedAt = Date.now();
@@ -466,7 +506,7 @@ export function getActiveAIConfig(): AIModelStatus {
     status: 'online',
     provider: activeEngineSettings.provider,
     activeModel: activeEngineSettings.model || DEFAULT_LOCKED_MODEL,
-    // The self-hosted Mistral-Nemo endpoint is a text completion API: no vision.
+    // The self-hosted Haley endpoint is a text completion API: no vision.
     hasVision: false,
     hasTerminal: true,
   };
@@ -493,8 +533,8 @@ export interface GenerateWithActiveModelResult {
 export const VALID_CORE_MODELS = [
   'custom-llm',
   'custom',
-  'mistral-nemo-12b',
-  'mistral-nemo',
+  'haley',
+  'haley-llama3-8b',
   'local-llm',
 ] as const;
 
@@ -523,7 +563,7 @@ export interface RealAICallResult {
 // ---------------------------------------------------------------------------
 // Custom self-hosted LLM endpoint (own inference engine)
 // ---------------------------------------------------------------------------
-// A FastAPI + ngrok server hosting an uncensored Mistral-Nemo-12B on Kaggle T4
+// A FastAPI server hosting the Haley model (Llama-3-8B + Haley QLoRA adapter)
 // GPUs. Its contract is deliberately tiny:
 //     POST { prompt: string, max_tokens: number } -> { response: string }
 //
@@ -534,13 +574,13 @@ export interface RealAICallResult {
 //      reads exactly like "the agent is not working".
 //   2. A cold ngrok tunnel / T4 can take tens of seconds, so the timeout is
 //      generous and configurable instead of the 45s used for cloud APIs.
-export const CUSTOM_LLM_DEFAULT_URL = 'https://pancreas-smashing-breeching.ngrok-free.dev/generate';
+export const CUSTOM_LLM_DEFAULT_URL = (process.env.HALEY_API_URL || '').trim() || 'https://REPLACE_WITH_HALEY_API_URL/generate';
 
 export const CUSTOM_LLM_MODEL_ALIASES = [
   'custom-llm',
   'custom',
-  'mistral-nemo-12b',
-  'mistral-nemo',
+  'haley',
+  'haley-llama3-8b',
   'local-llm',
 ] as const;
 
@@ -554,7 +594,7 @@ export interface CustomLlmConfig {
 
 export function getCustomLlmConfig(): CustomLlmConfig {
   const enabled = !['0', 'false', 'no', 'off'].includes((process.env.CUSTOM_LLM_ENABLED || '').trim().toLowerCase());
-  const url = (process.env.CUSTOM_LLM_API_URL || CUSTOM_LLM_DEFAULT_URL).trim();
+  const url = (process.env.HALEY_API_URL || process.env.CUSTOM_LLM_API_URL || CUSTOM_LLM_DEFAULT_URL).trim();
   const key = (process.env.CUSTOM_LLM_API_KEY || '').trim();
   const rawMax = Number(process.env.CUSTOM_LLM_MAX_TOKENS);
   const rawTimeout = Number(process.env.CUSTOM_LLM_TIMEOUT_MS);
@@ -628,7 +668,7 @@ async function callCustomLlmEndpoint(params: {
 }): Promise<{ text: string; modelName: string; fullPrompt: string; rawResponse: string }> {
   const cfg = getCustomLlmConfig();
   if (!cfg.configured) {
-    throw new Error('CUSTOM_LLM_NOT_CONFIGURED: CUSTOM_LLM_API_URL is missing or not a valid http(s) URL.');
+    throw new Error('HALEY_API_NOT_CONFIGURED: HALEY_API_URL is missing or not a valid http(s) URL.');
   }
   const fullPrompt = buildCustomLlmPrompt(params);
   const headers: Record<string, string> = {
@@ -662,7 +702,7 @@ async function callCustomLlmEndpoint(params: {
   }
   return {
     text: cleanAssistantText(stripEchoedPrompt(fullPrompt, raw)),
-    modelName: 'custom-llm:mistral-nemo-12b',
+    modelName: 'haley-llama3-8b',
     fullPrompt,
     rawResponse: raw,
   };
@@ -682,7 +722,7 @@ export function customLlmUnavailableResult(error: unknown): RealAICallResult {
     text:
       `⚠️ **Self-hosted LLM endpoint ne jawab nahi diya.**\n\n` +
       `Ye project sirf ek hi engine par chalta hai: aapka **${CUSTOM_LLM_ENGINE.name}** ` +
-      `(\`CUSTOM_LLM_API_URL\`). Koi doosra model ya fallback brain nahi hai, is liye sach ye hai ` +
+      `(\`HALEY_API_URL\`). Koi doosra model ya fallback brain nahi hai, is liye sach ye hai ` +
       `ki is waqt jawab generate nahi hua.\n\n` +
       `**Endpoint error:** \`${message}\`\n\n` +
       `Check karein: FastAPI + ngrok tunnel live hai? URL theek hai? Phir \`/api/custom-llm/test\` ` +
@@ -706,7 +746,7 @@ export async function callRealAIModel(params: RealAICallParams): Promise<RealAIC
   const cfg = getCustomLlmConfig();
   if (!cfg.configured) {
     throw new Error(
-      'CUSTOM_LLM_NOT_CONFIGURED: set CUSTOM_LLM_API_URL to your /generate endpoint (FastAPI + ngrok).',
+      'HALEY_API_NOT_CONFIGURED: set HALEY_API_URL to your /generate endpoint.',
     );
   }
 
@@ -1453,7 +1493,7 @@ app.post('/api/agent/tools/playwright', async (req, res) => {
 // LANGCHAIN AUTONOMOUS AGENT & ADMIN API ENDPOINTS
 // Providing 100% full raw administrative access to LangChain AgentExecutor
 // ==========================================
-const LANGCHAIN_ADMIN_KEY = process.env.HALYE_ADMIN_KEY || 'sk-halye-raw-access-admin';
+const LANGCHAIN_ADMIN_KEY = process.env.HALYE_ADMIN_KEY || '';
 
 function runLangChainCLI(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -5088,7 +5128,7 @@ async function startServer() {
     });
   }
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Halye AI Assistant] Running on http://0.0.0.0:${PORT}`);
   });

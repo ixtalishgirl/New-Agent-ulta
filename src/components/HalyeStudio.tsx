@@ -71,20 +71,18 @@ import { FullProcessModal } from './FullProcessModal';
 import { BLANK_CANVAS_CODE } from '../templates';
 
 /**
- * There is exactly ONE model in this project: the self-hosted Mistral-Nemo-12B
- * endpoint (FastAPI + ngrok). Every cloud model that used to be listed here
- * (Nemotron 120B, Gemma 4, Laguna XS, DeepSeek V4, MiniMax M3 and the 4-model
- * squad) has been deleted from the codebase, so nothing can be switched to them.
+ * There is exactly ONE model in this project: the self-hosted Haley model
+ * (Llama-3-8B + QLoRA adapter) served via FastAPI (HALEY_API_URL).
  */
 export const HALYE_CORE_MODELS = [
   {
-    id: 'custom-llm',
-    name: 'custom-llm',
-    shortName: 'Custom LLM (Self-Hosted)',
-    badge: 'Mistral-Nemo-12B • Live',
+    id: 'haley-llama3-8b',
+    name: 'haley-llama3-8b',
+    shortName: 'Haley (Self-Hosted)',
+    badge: 'Haley Llama-3-8B • Live',
     badgeColor: 'text-cyan-400 bg-cyan-950/80 border-cyan-500/80 shadow-md shadow-cyan-500/20',
     icon: '🧠',
-    desc: 'Aapka apna uncensored Mistral-Nemo-12B (FastAPI + ngrok). Chat, code generation, tool planning aur review — sab isi ek engine par chalte hain.',
+    desc: 'Aapka apna Haley model (FastAPI). Chat, code generation, tool planning aur review — sab isi ek engine par chalte hain.',
     provider: 'Self-Hosted Endpoint',
   },
 ];
@@ -2183,7 +2181,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               id="halye-model-swap-btn"
               type="button"
               onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)}
-              title="Active engine: your self-hosted Mistral-Nemo-12B endpoint"
+              title="Active engine: your self-hosted Haley endpoint"
               className="h-10 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 flex items-center gap-1.5 transition cursor-pointer shrink-0 text-xs font-mono select-none active:scale-95"
             >
               <span className="text-sm">🧠</span>
@@ -2263,7 +2261,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
                 ))}
 
                 <p className="text-[10px] text-zinc-500 font-mono leading-relaxed">
-                  Sirf ek hi model hai — baaki sab (Nemotron, Gemma, Laguna, DeepSeek, MiniMax, 4-model squad) code se
+                  Sirf ek hi model hai — baaki sab purane models code se
                   delete kar diye gaye hain. Endpoint badalna ho to CUSTOM_LLM_API_URL env var set karein.
                 </p>
               </div>
