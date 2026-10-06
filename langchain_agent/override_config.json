@@ -8,8 +8,8 @@
   "stop_sequences": [],
   "token_bias": {},
   "logit_suppression_active": false,
-  "active_model": "noillum123/qwen3-8-27b-uncensored-fp8",
-  "base_url": "https://sampling-stainless-research.ngrok-free.dev/v1",
-  "api_key": "sk-fake-key",
-  "last_updated": "2026-09-19T07:48:00.000Z"
+  "active_model": "haley-llama3-8b",
+  "base_url": "${HALEY_API_URL}",
+  "api_key": "",
+  "last_updated": "2026-10-06T00:00:00.000Z"
 }

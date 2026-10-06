@@ -1,7 +1,7 @@
 """
 Custom self-hosted LLM endpoint client for the Halye agent.
 
-The endpoint is a FastAPI + ngrok server hosting an uncensored Mistral-Nemo-12B
+The endpoint is a FastAPI server hosting the Haley model (HALEY_API_URL)
 on Kaggle T4 GPUs. Its contract is deliberately tiny:
 
     POST {"prompt": str, "max_tokens": int}  ->  {"response": str}
@@ -32,7 +32,8 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("HalyeCustomLLM")
 
-DEFAULT_URL = "https://pancreas-smashing-breeching.ngrok-free.dev/generate"
+import os
+DEFAULT_URL = os.environ.get("HALEY_API_URL", "https://REPLACE_WITH_HALEY_API_URL/generate")
 
 ASSISTANT_MARKER = "### ASSISTANT"
 
@@ -388,7 +389,7 @@ if LANGCHAIN_AVAILABLE:
         tool calls. That is what lets the existing AgentExecutor use it as-is.
         """
 
-        model_name: str = "custom-llm:mistral-nemo-12b"
+        model_name: str = "haley-llama3-8b"
         bound_tools: List[Any] = []
 
         @property

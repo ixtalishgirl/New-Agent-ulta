@@ -313,7 +313,7 @@ export function getSelfKnowledge(): SelfKnowledge {
       editableSurface: 'src/halye-theme.css (CSS tokens only - engine never rewrites component code)',
     },
     brain: {
-      modelName: 'nvidia/nemotron-3-super-120b-a12b',
+      modelName: 'haley-llama3-8b',
       providerConfigured: realInferenceAvailable,
       configuredProviders,
       missingProviders,
