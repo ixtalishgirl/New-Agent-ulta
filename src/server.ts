@@ -78,46 +78,16 @@ app.delete('/api/models/local/:modelId', (req, res) => {
   }
 });
 
-const PLAYWRIGHT_BROWSER_MARKET = '/home/daytona/.cache/ms-playwright';
-
 async function probePlaywright() {
-  const verdict: any = {
+  return {
     playwright: false,
     browser: false,
     binaryPath: '',
     binaryVersion: '',
     error: '',
+    mode: 'serverless-fetch',
+    note: 'Playwright browsers unavailable on serverless; use /api/agent/tools/playwright (fetch-based).',
   };
-  try {
-    const playwright = await import('playwright');
-    verdict.playwright = true;
-    try {
-      const l = await playwright.chromium.launch({
-        executablePath: `${PLAYWRIGHT_BROWSER_MARKET}/chromium-1234/chrome-linux64/chrome`,
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-      try {
-        const pg = await l.newPage();
-        await pg.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 20000 });
-        const v = await pg.evaluate(() => {
-          const u = navigator.userAgent || '';
-          return { userAgent: u, title: document.title };
-        });
-        verdict.browser = true;
-        verdict.binaryPath = `${PLAYWRIGHT_BROWSER_MARKET}/chromium-1234/chrome-linux64/chrome`;
-        verdict.binaryVersion = v?.userAgent ? v.userAgent.split('Chrome/')[1]?.split(' ')[0] || 'unknown' : 'unknown';
-        await pg.close();
-      } finally {
-        await l.close().catch(() => {});
-      }
-    } catch (err) {
-      verdict.error = err instanceof Error ? err.message : 'browser launch failed';
-    }
-  } catch (err) {
-    verdict.error = err instanceof Error ? err.message : 'playwright import failed';
-  }
-  return verdict;
 }
 
 // Single model status helper: reads the system's one configured endpoint + key.
@@ -386,34 +356,13 @@ app.post('/api/tools/web-browse', async (req, res) => {
   return res.json(inspected);
 });
 
-// Playwright viewport helper for screenshot pipeline.
-async function launchHeadlessBrowser() {
-  try {
-    const playwright = await import('playwright');
-    return await playwright.chromium.launch({
-      executablePath: `${PLAYWRIGHT_BROWSER_MARKET}/chromium-1234/chrome-linux64/chrome`,
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'browser launch failed';
-    throw new Error(`Playwright launch failed: ${message}`);
-  }
+// Playwright viewport helper - stubbed for serverless (browsers unavailable).
+async function launchHeadlessBrowser(): Promise<never> {
+  throw new Error('Playwright unavailable: use /api/agent/tools/playwright (fetch-based inspection).');
 }
 
-async function screenshotUrl(targetUrl: string) {
-  const browser = await launchHeadlessBrowser();
-  try {
-    const page = await browser.newPage();
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const status = response ? response.status() : 0;
-    const screenshot = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 80 });
-    const title = await page.title();
-    return { screenshot, title, status };
-  } finally {
-    await browser.close().catch(() => {});
-  }
+async function screenshotUrl(_targetUrl: string) {
+  throw new Error('Screenshot unavailable: Playwright browsers not available on serverless.');
 }
 
 async function runWebInspection(targetUrl: string): Promise<_WebInspectionResult> {
@@ -430,61 +379,44 @@ async function runWebInspection(targetUrl: string): Promise<_WebInspectionResult
   }
 
   try {
-    const { screenshot, title, status } = await screenshotUrl(targetUrl);
-    if (status === 0) {
-      return {
-        success: false,
-        url: targetUrl,
-        title: 'Unreachable',
-        headings: [],
-        touchable_elements: { buttons: [], inputs: [], interactive_links: [] },
-        human_readable_summary: 'The target URL did not respond in time.',
-        error: 'connection timeout',
-      };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const r = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'HalyeBot/1.0' },
+    });
+    clearTimeout(timer);
+    const html = await r.text();
+    const title = (html.match(/<title[^>]*>([^<]*)/i)?.[1] || '').trim().slice(0, 200) || 'Inspected page';
+
+    const buttons: Array<{ text: string; type?: string }> = [];
+    const btnRe = /<button[^>]*>([^<]{1,80})/gi;
+    let m: RegExpExecArray | null;
+    while ((m = btnRe.exec(html)) && buttons.length < 30) {
+      const t = m[1].trim();
+      if (t) buttons.push({ text: t, type: 'button' });
+    }
+    const inputs: Array<{ tag: string; type?: string; placeholder?: string }> = [];
+    const inRe = /<(input|textarea|select)[^>]*>/gi;
+    while ((m = inRe.exec(html)) && inputs.length < 30) {
+      const tag = m[0];
+      const ph = tag.match(/placeholder=["']?([^"'>]{1,60})/i)?.[1] || '';
+      inputs.push({ tag: m[1].toLowerCase(), type: 'text', placeholder: ph });
+    }
+    const links: Array<{ href: string; text: string }> = [];
+    const aRe = /<a[^>]*href=["']([^"']{1,200})["'][^>]*>([^<]{1,80})/gi;
+    while ((m = aRe.exec(html)) && links.length < 30) {
+      links.push({ href: m[1], text: m[2].trim() });
     }
 
-    let base64: string | null = null;
-    try {
-      base64 = screenshot.toString('base64');
-    } catch {}
-    if (base64 === null) base64 = '';
-    let analyzed: _VisionAnalysisResult | null = null;
-    try {
-      const analysis = await queryCustomModel('local', [
-        'SYSTEM: You are a frontend vision analyzer.',
-        'Return ONLY JSON with these keys: layoutType, dominantColors, components, typography, ocrSummary.',
-        'OCR this screenshot and describe the visible UI in plain text.\n\nData URL:\n' + (typeof base64 === 'string' ? base64.slice(0, 8000) : ''),
-      ].join('\n'), { maxTokens: 512 });
-      if (analysis.ok) {
-        try {
-          const rawText = typeof analysis.text === 'string' ? analysis.text : '';
-          analyzed = JSON.parse(rawText) as _VisionAnalysisResult;
-        } catch {}
-      }
-    } catch {}
-
-    const buttons: Array<{ text: string; type?: string; id?: string }> = [
-      { text: 'Live preview button detected via Web Eyes', type: 'button' },
-    ];
-    const inputs: Array<{ tag: string; type?: string; name?: string; placeholder?: string; id?: string }> = [
-      { tag: 'input', type: 'text', placeholder: 'Web page text input placeholder' },
-    ];
-    const links: Array<{ href: string; text: string }> = [
-      { href: targetUrl, text: 'Opened page' },
-    ];
-
-    const safeTitle = typeof title === 'string' && title.length > 0 ? title : 'Inspected page';
-    const safeAnalyzed: _VisionAnalysisResult | undefined = analyzed && typeof analyzed === 'object' && 'layoutType' in analyzed ? analyzed : undefined;
-
     return {
-      success: true,
+      success: r.ok,
       url: targetUrl,
-      title: safeTitle,
-      description: `Web Eyes inspected ${targetUrl} and captured a live screenshot.`,
-      headings: safeAnalyzed?.layoutType ? [safeAnalyzed.layoutType] : [safeTitle],
+      title,
+      description: `Web Eyes fetched ${targetUrl} (HTTP ${r.status}).`,
+      headings: [title],
       touchable_elements: { buttons, inputs, interactive_links: links },
-      human_readable_summary: `Playwright loaded ${targetUrl} in headless Chromium, captured a JPEG screenshot, and sent it to the active model for analysis.`,
-      visionAnalysis: safeAnalyzed as _VisionAnalysisResult | undefined,
+      human_readable_summary: `Fetched ${targetUrl}: ${buttons.length} buttons, ${inputs.length} inputs, ${links.length} links found.`,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'web inspection failed';
@@ -494,7 +426,7 @@ async function runWebInspection(targetUrl: string): Promise<_WebInspectionResult
       title: 'Inspection Failed',
       headings: [],
       touchable_elements: { buttons: [], inputs: [], interactive_links: [] },
-      human_readable_summary: 'Playwright could not complete the inspection.',
+      human_readable_summary: 'Could not fetch the URL.',
       error: message,
     };
   }

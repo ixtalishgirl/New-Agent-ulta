@@ -743,11 +743,27 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         text: m.text || '',
       }));
 
+      // Build prompt with attachment context (model is text-only; describe what's attached)
+      let promptToSend = userMessageText;
+      const shots = filesForThisMessage.filter((f) => f.type === 'screenshot' || f.type === 'image');
+      const others = filesForThisMessage.filter((f) => f.type !== 'screenshot' && f.type !== 'image');
+      if (shots.length > 0) {
+        promptToSend += `\n\n[SCREENSHOT ATTACHED x${shots.length}: ${shots.map((s) => s.name).join(', ')} — user ki screen ka screenshot hai. Screen Eyes se liya gaya. Jo dikh raha ho uske baare me jawab do.]`;
+      }
+      for (const f of others.slice(0, 3)) {
+        const txt = (f as any).textContent || (f as any).content;
+        if (txt && typeof txt === 'string' && txt.length < 8000) {
+          promptToSend += `\n\n[ATTACHED FILE: ${f.name}]\n${txt.slice(0, 8000)}`;
+        } else {
+          promptToSend += `\n\n[ATTACHED FILE: ${f.name} (${f.type})]`;
+        }
+      }
+
       const res = await fetch('/api/model/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: userMessageText,
+          prompt: promptToSend,
           max_tokens: 1024,
         }),
       });
