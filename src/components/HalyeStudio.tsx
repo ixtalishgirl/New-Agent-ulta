@@ -48,11 +48,12 @@ import {
   FolderKanban,
   Server,
   Stethoscope,
-  BookOpen
+  BookOpen,
+  Crown,
+  FileCode
 } from 'lucide-react';
 import { 
   AttachedFile, 
-  TerminalExecutionResult, 
   VisionAnalysisResult, 
   WebInspectionResult, 
   ChatMessage, 
@@ -64,6 +65,8 @@ import {
 } from '../types';
 import { WorkspaceExplorer } from './WorkspaceExplorer';
 import { PowersSuite } from './PowersSuite';
+import { GodModePanel } from './GodModePanel';
+import { SnippetLibrary } from './SnippetLibrary';
 import { ProjectStudioView } from './ProjectStudioView';
 import { ScreenshotModal } from './ScreenshotModal';
 import { ActionHistoryCard } from './ActionHistoryCard';
@@ -132,7 +135,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
 
   const [previewKey, setPreviewKey] = useState<number>(1);
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes' | 'project'>('preview');
+  const [activePane, setActivePane] = useState<'preview' | 'terminal' | 'workspace' | 'powers' | 'vision' | 'code' | 'webeyes' | 'project' | 'godmode' | 'snippets'>('preview');
   const [projectStudioSubTab, setProjectStudioSubTab] = useState<'files' | 'backend' | 'diagnostics' | 'guide'>('files');
   const [autoSelectWorkspaceFile, setAutoSelectWorkspaceFile] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -144,7 +147,7 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
   const [realtimeInput, setRealtimeInput] = useState('');
   const [isApplyingRealtime, setIsApplyingRealtime] = useState(false);
   const [realtimeToast, setRealtimeToast] = useState<string | null>(null);
-  const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'sandbox'>('sandbox');
+  const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'sandbox'>('chat');
 
   // Web Eyes & Touch State
   const [webUrl, setWebUrl] = useState('https://news.ycombinator.com');
@@ -740,125 +743,50 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
         text: m.text || '',
       }));
 
-      const res = await fetch('/api/agent/generate', {
+      const res = await fetch('/api/model/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: userMessageText,
-          currentCode: code,
-          attachedFiles: filesForThisMessage,
-          model: modelInfo?.activeModel || 'custom-llm',
-          conversationHistory,
+          max_tokens: 1024,
         }),
       });
 
       const data = await res.json();
-
-      // If terminal execution returned in response
-      let termResult: TerminalExecutionResult | undefined = undefined;
-      if (data.terminalResult) {
-        termResult = data.terminalResult;
-        setTerminalHistory((prev) => [
-          ...prev,
-          {
-            cmd: data.terminalResult.command,
-            out: data.terminalResult.stdout,
-            err: data.terminalResult.stderr,
-            exit: data.terminalResult.exitCode,
-            ms: data.terminalResult.durationMs,
-          },
-        ]);
+      if (!data.success) {
+        throw new Error(data.error || 'Model se jawab nahi mila.');
       }
 
-      // If code returned (app update or vision reconstruction)
-      if (data.code && data.code.includes('<')) {
-        setCode(data.code);
-        setPreviewKey((k) => k + 1);
-        setActivePane('preview');
-        setMobileActiveView('sandbox');
+      const modelText = String(data.response || '').trim();
+      if (!modelText) {
+        throw new Error('Model ne khaali jawab diya.');
       }
 
-      if (data.webInspection) {
-        setWebInspectionData(data.webInspection);
-      }
-
-      // Route pane autonomously
-      if (data.suggestedPane) {
-        setActivePane(data.suggestedPane);
-      } else if (data.terminalResult) {
-        setActivePane('terminal');
-      } else if (data.zipInspection || data.fileCreated) {
-        setActivePane('workspace');
-      } else if (data.powerBuilt) {
-        setActivePane('powers');
-      }
-
-      if (data.zipInspection) {
-        setAutoSelectWorkspaceFile(data.zipInspection.archive_name || 'demo_project.zip');
-      }
-      if (data.fileCreated) {
-        setAutoSelectWorkspaceFile(data.fileCreated.path);
-      }
-
-      const cleanAssistantMsgText = (() => {
-        let t = (data.text || 'Command processed.').trim();
-        if (data.code) {
-          t = t
-            .replace(/```html[\s\S]*?```/gi, '')
-            .replace(/```htm[\s\S]*?```/gi, '')
-            .replace(/```xml[\s\S]*?```/gi, '')
-            .replace(/<!DOCTYPE html>[\s\S]*?<\/html>/gi, '')
-            .trim();
+      // If the model returned HTML code, load it into the live preview
+      const htmlMatch = modelText.match(/```html\s*([\s\S]*?)```/i) || modelText.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i);
+      if (htmlMatch) {
+        const codeHtml = (htmlMatch[1] || htmlMatch[0]).trim();
+        if (codeHtml.includes('<')) {
+          setCode(codeHtml);
+          setPreviewKey((k) => k + 1);
+          setActivePane('preview');
+          setMobileActiveView('sandbox');
         }
-        return t || 'Halye: Requested application/website autonomously build ho chuki hai. Message ke saath mojood Live Preview button se check karein.';
-      })();
+      }
+
+      const cleanAssistantMsgText = modelText
+        .replace(/```html[\s\S]*?```/gi, '[HTML preview me load ho gaya]')
+        .trim();
 
       const assistantMessage: ChatMessage = {
         id: 'ast-' + Date.now(),
         role: 'assistant',
         text: cleanAssistantMsgText,
-        generatedCode: data.code || undefined,
-        terminalResult: termResult,
-        visionAnalysis: data.visionAnalysis,
-        webInspection: data.webInspection,
-        zipInspection: data.zipInspection,
-        powerBuilt: data.powerBuilt,
-        fileCreated: data.fileCreated,
-        pipeline: data.pipeline,
-        toolCalls: data.toolCalls,
-        dialogue: data.dialogue || data.pipeline?.dialogue,
         timestamp: new Date().toLocaleTimeString(),
-        model: data.model || modelInfo?.activeModel,
-        provider: data.provider || modelInfo?.provider,
-        actionTaken: data.pipeline
-          ? `Single-engine agent pipeline: ${data.pipeline.orchestrator?.model || 'custom-llm'}`
-          : data.toolCalls && data.toolCalls.length > 0
-          ? `Executed ${data.toolCalls.length} agent tool call(s) on the self-hosted engine`
-          : data.zipInspection
-          ? `ZIP Archive Inspected: ${data.zipInspection.archive_name}`
-          : data.powerBuilt
-          ? `Autonomous Power Built: ${data.powerBuilt.name}`
-          : data.fileCreated
-          ? `Workspace File Created: ${data.fileCreated.name}`
-          : data.webInspection
-          ? `Web Eyes Inspected: ${data.webInspection.title || data.webInspection.url}`
-          : data.terminalResult
-          ? `Terminal Command: ${data.terminalResult.command}`
-          : data.visionAnalysis
-          ? 'Reconstructed App from Screenshot'
-          : data.code
-          ? 'Rendered Live AMOLED Application'
-          : 'Processed via Active AI Model',
-        actionHistory: data.actionHistory,
-        projectScopeUpdate: data.projectScopeUpdate,
+        model: 'haley-v2',
+        provider: 'custom',
+        actionTaken: 'Haley model reply',
       };
-
-      if (data.projectScopeUpdate && onUpdateProjectScope && projectScope) {
-        onUpdateProjectScope({
-          ...projectScope,
-          ...data.projectScopeUpdate,
-        });
-      }
 
       setConversation((prev) => [...prev, assistantMessage]);
     } catch (err: any) {
@@ -2360,6 +2288,28 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
               <Code2 className="w-3.5 h-3.5 text-zinc-400" />
               <span>Workspace Files</span>
             </button>
+
+            <button
+              id="tab-godmode-btn"
+              onClick={() => setActivePane('godmode')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'godmode' ? 'bg-zinc-900 text-amber-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>God Mode</span>
+            </button>
+
+            <button
+              id="tab-snippets-btn"
+              onClick={() => setActivePane('snippets')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                activePane === 'snippets' ? 'bg-zinc-900 text-cyan-400 border border-zinc-800' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Snippets</span>
+            </button>
           </div>
 
           {/* Viewport Resizer (for Live Website tab) */}
@@ -3113,6 +3063,18 @@ export const HalyeStudio: React.FC<HalyeStudioProps> = ({
           )}
 
           {/* Viralux Dedicated Project Studio Pane (Raw Files, Backend API, Diagnostics, Guide) */}
+          {activePane === 'godmode' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-black">
+              <GodModePanel />
+            </div>
+          )}
+
+          {activePane === 'snippets' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-black">
+              <SnippetLibrary />
+            </div>
+          )}
+
           {activePane === 'project' && (
             <div className="flex-1 flex flex-col min-h-0 bg-black">
               <ProjectStudioView

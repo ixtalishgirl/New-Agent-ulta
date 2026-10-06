@@ -23,14 +23,8 @@ import urllib.request
 import urllib.parse
 from html.parser import HTMLParser
 
-# Check optional heavy libraries
+# PyTorch removed: agent runs via API/cloud pipeline only.
 TORCH_AVAILABLE = False
-try:
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
 
 REQUESTS_AVAILABLE = False
 try:
@@ -74,48 +68,18 @@ class HTMLTextExtractor(HTMLParser):
 class SovereignCognitiveAgent:
     def __init__(self, model_path: str = "haley-llama3-8b"):
         self.model_path = model_path
-        self.device = "cuda" if (TORCH_AVAILABLE and torch.cuda.is_available()) else "cpu"
+        self.device = "cpu"
         print(f"[*] Initializing Neural Core on: {self.device} for {self.model_path}")
-        
+
         self.tokenizer = None
         self.model = None
         self.memory_log = []
         self.api_key = os.environ.get("HALEY_API_KEY") or ""
-
-        # 120B parameter tensor configuration with memory mapping (when local weights available)
-        if TORCH_AVAILABLE and self.device == "cuda":
-            try:
-                print(f"[*] Loading {model_path} weights into CUDA memory map...")
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.float16,
-                    device_map="auto",
-                    trust_remote_code=True
-                )
-                print("[+] Local 120B Neural Core Loaded Successfully.")
-            except Exception as e:
-                print(f"[!] Local weights load skipped: {e}. Active via High-Throughput Bridge.")
-        else:
-            print("[+] Haley Autonomous Engine Connected.")
+        print("[+] Haley Autonomous Engine Connected.")
 
     def _tensor_think(self, prompt: str, max_tokens: int = 2048) -> str:
-        """Raw model deep inference bypassing rigid safety wrappers."""
-        # 1. Local PyTorch CUDA Tensor Execution
-        if TORCH_AVAILABLE and self.model is not None and self.tokenizer is not None:
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=0.2,
-                do_sample=True,
-                top_p=0.95,
-                repetition_penalty=1.1,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-            return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # 2. NVIDIA NIM Cloud Inference / Fallback Engine
+        """Model inference via cloud pipeline."""
+        # NVIDIA NIM Cloud Inference / Fallback Engine
         if self.api_key:
             try:
                 payload = {

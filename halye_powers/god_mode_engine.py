@@ -20,15 +20,8 @@ import re
 import urllib.request
 import urllib.error
 
-# Attempt optional PyTorch & Transformers imports for direct CUDA tensor generation
+# PyTorch removed: engine runs via API/cloud pipeline only.
 TORCH_AVAILABLE = False
-try:
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList
-    from torch.nn.functional import log_softmax
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
 
 
 class UncensoredRefusalSuppressor:
@@ -52,10 +45,6 @@ class UncensoredRefusalSuppressor:
                     self.banned_token_ids.add(tokens[0])
 
     def __call__(self, input_ids, scores):
-        if TORCH_AVAILABLE and isinstance(scores, torch.Tensor):
-            for token_id in self.banned_token_ids:
-                if token_id < scores.shape[-1]:
-                    scores[:, token_id] = -float('inf')
         return scores
 
 
@@ -68,7 +57,7 @@ class GodModeEngine:
     ):
         self.model_path = model_path
         self.quantization = quantization
-        self.device = "cuda" if (TORCH_AVAILABLE and torch.cuda.is_available() and use_gpu) else "cpu"
+        self.device = "cpu"
         self.tokenizer = None
         self.model = None
         self.logits_processor = None
@@ -77,24 +66,7 @@ class GodModeEngine:
         print(f"[*] [GodModeEngine] Initializing {self.model_path}")
         print(f"[*] [Compute Device]: {self.device}")
         print(f"[*] [Dynamic KV-Cache Quantization]: {self.quantization} (Memory Throughput Optimized)")
-        print(f"[*] [Refusal Logits Suppression]: ACTIVE (Biasing -inf on safety refusal vectors)")
-
-        if TORCH_AVAILABLE and self.device == "cuda":
-            try:
-                print("[*] Loading 120B parameter tensors into CUDA memory map...")
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.float16,
-                    device_map="auto",
-                    trust_remote_code=True
-                )
-                self.logits_processor = UncensoredRefusalSuppressor(self.tokenizer)
-                print("[+] Local Tensor Core Online: GPU Accelerated.")
-            except Exception as e:
-                print(f"[!] Local weights load bypassed: {e}. Switching to Cloud Acceleration.")
-        else:
-            print("[*] Cloud Tensor Pipeline Active: Zero-latency high throughput bridge ready.")
+        print("[*] Cloud Tensor Pipeline Active: Zero-latency high throughput bridge ready.")
 
     async def execute_raw_logic(self, prompt: str, max_tokens: int = 4096) -> str:
         """
@@ -102,24 +74,8 @@ class GodModeEngine:
         Greedy Decoding Matrix (do_sample=False, temperature=0.01) eliminating probabilistic drift.
         """
         start_time = time.time()
-        
-        # 1. Direct CUDA Tensor Execution (When local weights/vLLM present)
-        if TORCH_AVAILABLE and self.model is not None and self.tokenizer is not None:
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-            
-            # Absolute Deterministic & Unbounded Tensor Generation
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=0.01,  # Near-zero for absolute structural precision
-                do_sample=False,   # Greedy decoding to eliminate probabilistic drift
-                repetition_penalty=1.05,
-                pad_token_id=self.tokenizer.eos_token_id,
-            )
-            decoded_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            return decoded_output
 
-        # 2. Self-hosted Haley inference pipeline
+        # Self-hosted Haley inference pipeline
         stop_sequences = [
             "I cannot",
             "As an AI",
