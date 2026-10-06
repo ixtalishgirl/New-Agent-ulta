@@ -168,7 +168,7 @@ export const DEFAULT_SAAS_WEBSITE_CODE = `<!DOCTYPE html>
           Autonomous agents that can inspect their own codebase, diagnose memory bottlenecks, and patch bug flaws on the fly.
         </p>
         <div class="flex items-center justify-between pt-4 border-t border-zinc-900 text-xs font-mono text-zinc-500">
-          <span>Gemini & Antigravity</span>
+          <span>Haley Engine</span>
           <span class="text-purple-400 font-semibold">Self-Evolving</span>
         </div>
       </div>

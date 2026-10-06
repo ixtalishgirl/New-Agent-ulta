@@ -16,6 +16,10 @@ interface CustomModelRecord {
 
 export type CustomModelSummary = Omit<CustomModelRecord, 'apiKey' | 'extraHeaders'>;
 
+function resolveEnvPlaceholders(url: string): string {
+  return (url || '').replace(/\$\{HALEY_API_URL\}/g, process.env.HALEY_API_URL || '');
+}
+
 function loadModels(): CustomModelRecord[] {
   try {
     if (!fs.existsSync(MODELS_FILE)) {
@@ -23,7 +27,8 @@ function loadModels(): CustomModelRecord[] {
     }
     const raw = fs.readFileSync(MODELS_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list.map((m: any) => ({ ...m, apiUrl: resolveEnvPlaceholders(m.apiUrl) }));
   } catch (err) {
     console.error('[custom-models] Failed to load models file:', err);
     return [];
