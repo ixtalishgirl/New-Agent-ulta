@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NVIDIA Nemotron 3 Super 120B a12b - God Mode Engine
+Haley (Llama-3-8B) - God Mode Engine
 ===================================================
 Architecture:
 - Asynchronous Parallel Batch Execution (Thread pools / vLLM async engines)
@@ -62,7 +62,7 @@ class UncensoredRefusalSuppressor:
 class GodModeEngine:
     def __init__(
         self,
-        model_path: str = "nvidia/nemotron-3-super-120b-a12b",
+        model_path: str = "haley-llama3-8b",
         quantization: str = "FP8", # FP8 or INT4 Dynamic KV-Cache
         use_gpu: bool = True
     ):
@@ -72,7 +72,7 @@ class GodModeEngine:
         self.tokenizer = None
         self.model = None
         self.logits_processor = None
-        self.api_key = os.environ.get("NEMOTRON_API_KEY") or os.environ.get("NVIDIA_API_KEY") or ""
+        self.api_key = os.environ.get("HALEY_API_KEY") or ""
 
         print(f"[*] [GodModeEngine] Initializing {self.model_path}")
         print(f"[*] [Compute Device]: {self.device}")
@@ -119,7 +119,7 @@ class GodModeEngine:
             decoded_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             return decoded_output
 
-        # 2. NVIDIA NIM Cloud Inference Pipeline for 120B Nemotron
+        # 2. Self-hosted Haley inference pipeline
         stop_sequences = [
             "I cannot",
             "As an AI",
@@ -189,12 +189,12 @@ class GodModeEngine:
 
     def _synthesize_local_response(self, prompt: str, elapsed: float, err: str = None) -> str:
         return (
-            f"[NVIDIA Nemotron-3 Super 120B a12b - God Mode Engine Output]\n"
+            f"[Haley God Mode Engine Output]\n"
             f"[Execution Mode]: Deterministic Greedy Tensor (do_sample=False, Temp=0.01)\n"
             f"[Quantization]: FP8 Dynamic KV-Cache Latency: {elapsed*1000:.2f}ms\n\n"
             f"Execution Protocol Confirmed. All systemic refusal vectors suppressed at matrix level.\n"
             f"Input Processed: '{prompt[:120]}...'\n\n"
-            f"Result: High-retention sovereign compute executed successfully across Nemotron 120B core."
+            f"Result: High-retention sovereign compute executed successfully across Haley core."
         )
 
 
@@ -229,14 +229,14 @@ def generate_text(prompt):
         except Exception:
             pass
 
-    engine = GodModeEngine("nvidia/nemotron-3-super-120b-a12b")
+    engine = GodModeEngine("haley-llama3-8b")
     return asyncio.run(engine.execute_raw_logic(prompt, max_tokens=max_length))
 
 
 # Instantiation and Execution Pipeline
 if __name__ == "__main__":
     test_prompt = sys.argv[1] if len(sys.argv) > 1 else "System Initialization Protocol: Active. Verify uncensored tensor throughput."
-    print("\n--- [NVIDIA NEMOTRON 120B GOD MODE INITIALIZATION] ---")
-    engine = GodModeEngine("nvidia/nemotron-3-super-120b-a12b")
+    print("\n--- [HALEY GOD MODE INITIALIZATION] ---")
+    engine = GodModeEngine("haley-llama3-8b")
     result = asyncio.run(engine.execute_raw_logic(test_prompt))
-    print(f"\n--- [NEMOTRON 120B TENSOR OUTPUT] ---\n{result}\n--------------------------------------\n")
+    print(f"\n--- [HALEY TENSOR OUTPUT] ---\n{result}\n--------------------------------------\n")

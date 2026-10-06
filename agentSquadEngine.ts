@@ -1,10 +1,11 @@
 /**
  * Master Architecture: Autonomous Tool Layer for the single self-hosted engine.
  *
- * The agent runs on ONE model: the self-hosted Mistral-Nemo-12B endpoint served
- * by FastAPI + ngrok (see server.ts -> CUSTOM_LLM_DEFAULT_URL). No cloud model is
- * configured or selected anywhere in this codebase, so everything here is tool
- * execution, intent analysis and code review - not model routing.
+ * The agent runs on ONE model: the self-hosted Haley model (Llama-3-8B +
+ * Haley QLoRA adapter) served by FastAPI (see server.ts -> HALEY_API_URL).
+ * No cloud model is configured or selected anywhere in this codebase, so
+ * everything here is tool execution, intent analysis and code review - not
+ * model routing.
  */
 
 import { exec } from 'child_process';
@@ -15,15 +16,17 @@ import fs from 'fs';
  * Descriptor of the one engine this project runs on. Kept in a single place so
  * the catalog, the API schema and the UI all describe the same brain.
  */
+const HALEY_API_URL = (process.env.HALEY_API_URL || '').trim() || 'https://REPLACE_WITH_HALEY_API_URL/generate';
+
 export const CUSTOM_LLM_ENGINE = {
-  id: 'custom-llm',
-  name: 'Custom LLM - Mistral-Nemo-12B (Self-Hosted)',
+  id: 'haley-llama3-8b',
+  name: 'Haley (Llama-3-8B + QLoRA, Self-Hosted)',
   provider: 'custom' as const,
-  endpoint: 'https://pancreas-smashing-breeching.ngrok-free.dev/generate',
-  parameters: '12B Mistral-Nemo (Kaggle T4, FastAPI + ngrok)',
+  endpoint: HALEY_API_URL,
+  parameters: '8B Llama-3 + Haley adapter (FastAPI)',
   speedRating: 'Live self-hosted inference',
   description:
-    'Your own uncensored Mistral-Nemo-12B served over a FastAPI + ngrok endpoint. ' +
+    'Your own Haley model served over a FastAPI endpoint. ' +
     'It is the only inference engine this agent uses: chat, code generation, tool planning and reviews all run through it.',
   strengths: [
     'Self-hosted: no cloud keys, no provider quotas',

@@ -53,7 +53,7 @@ def generate_text(prompt):
             pass
 
     if GodModeEngine is not None:
-        engine = GodModeEngine("nvidia/nemotron-3-super-120b-a12b")
+        engine = GodModeEngine("haley-llama3-8b")
         return asyncio.run(engine.execute_raw_logic(prompt, max_tokens=max_length))
 
     return f"[Raw Node Execution]: {prompt} processed with zero filter restrictions (temp=0, max_length=2048)."

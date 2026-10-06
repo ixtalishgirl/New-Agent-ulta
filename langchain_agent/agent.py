@@ -45,7 +45,7 @@ from langchain_agent.tools import (
     terminal_command_executor
 )
 
-# Self-hosted inference engine (FastAPI + ngrok Mistral-Nemo-12B).
+# Self-hosted inference engine (Haley via HALEY_API_URL).
 # When this endpoint is configured it replaces the simulated brain below and
 # becomes the model that actually reasons inside the AgentExecutor.
 from langchain_agent.custom_llm import (
@@ -283,7 +283,7 @@ class HalyeAgentBrain:
             try:
                 custom_config = custom_llm_get_config()
                 llm = CustomLLMChatModel()
-                self.model_type = "CustomLLMChatModel (Mistral-Nemo-12B @ FastAPI/ngrok endpoint)"
+                self.model_type = "Haley (Llama-3-8B @ HALEY_API_URL)"
                 self.uses_custom_llm = True
                 logger.info(
                     "Custom LLM engine active: %s (max_tokens=%s, timeout=%ss)",

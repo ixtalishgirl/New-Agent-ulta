@@ -57,7 +57,7 @@ export type RawModelCall = (params: {
   internal?: boolean;
 }) => Promise<{ text?: string; modelName?: string; provider?: string }>;
 
-const DEFAULT_MODEL = 'nvidia/nemotron-3-super-120b-a12b';
+const DEFAULT_MODEL = 'haley-llama3-8b';
 
 /** Planning must stay cheap: it runs on the critical path of a live chat. */
 const PLAN_MAX_TOKENS = 320;

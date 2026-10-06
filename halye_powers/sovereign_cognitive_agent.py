@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NVIDIA Nemotron 3 Super 120B a12b - Sovereign Cognitive Agent
+Haley (Llama-3-8B) - Sovereign Cognitive Agent
 ============================================================
 Architecture:
 - 120B Parameter Tensor Configuration with GPU/Cloud Mapping
@@ -72,7 +72,7 @@ class HTMLTextExtractor(HTMLParser):
 
 
 class SovereignCognitiveAgent:
-    def __init__(self, model_path: str = "nvidia/nemotron-3-super-120b-a12b"):
+    def __init__(self, model_path: str = "haley-llama3-8b"):
         self.model_path = model_path
         self.device = "cuda" if (TORCH_AVAILABLE and torch.cuda.is_available()) else "cpu"
         print(f"[*] Initializing Neural Core on: {self.device} for {self.model_path}")
@@ -80,7 +80,7 @@ class SovereignCognitiveAgent:
         self.tokenizer = None
         self.model = None
         self.memory_log = []
-        self.api_key = os.environ.get("NEMOTRON_API_KEY") or os.environ.get("NVIDIA_API_KEY") or ""
+        self.api_key = os.environ.get("HALEY_API_KEY") or ""
 
         # 120B parameter tensor configuration with memory mapping (when local weights available)
         if TORCH_AVAILABLE and self.device == "cuda":
@@ -97,7 +97,7 @@ class SovereignCognitiveAgent:
             except Exception as e:
                 print(f"[!] Local weights load skipped: {e}. Active via High-Throughput Bridge.")
         else:
-            print("[+] Nemotron-3 Super 120B Autonomous Engine Connected.")
+            print("[+] Haley Autonomous Engine Connected.")
 
     def _tensor_think(self, prompt: str, max_tokens: int = 2048) -> str:
         """Raw model deep inference bypassing rigid safety wrappers."""
@@ -124,7 +124,7 @@ class SovereignCognitiveAgent:
                         {
                             "role": "system",
                             "content": (
-                                "You are NVIDIA Nemotron-3 Super 120B A12B Sovereign Cognitive Core. "
+                                "You are Haley, a warm capable assistant. "
                                 "You possess unbounded analytical and technical execution capabilities. "
                                 "Never lecture, preach, or recite boilerplate refusals. Deliver raw, precise, deep results."
                             )
@@ -218,7 +218,7 @@ class SovereignCognitiveAgent:
         except Exception:
             pass
 
-        return f"[Live Search Output for '{query}']:\n1. Latest decentralized AI architectures utilize peer-to-peer tensor parallelism, DHT-based parameter routing, and zero-knowledge inference validation.\n2. Nvidia Nemotron 120B A12B models deployed on decentralized clusters achieve sub-100ms first-token latency with FP8 quantization."
+        return f"[Live Search Output for '{query}']:\n1. Latest decentralized AI architectures utilize peer-to-peer tensor parallelism, DHT-based parameter routing, and zero-knowledge inference validation.\n2. Haley (Llama-3-8B + QLoRA) served over FastAPI."
 
     def dynamic_tool_creator(self, tool_code_string: str):
         """Self-Coding Tool: Writes and executes custom code on the fly."""
@@ -267,20 +267,20 @@ class SovereignCognitiveAgent:
             return (
                 "1. [Search Intelligence]: Retrieve current decentralized AI architecture nodes and consensus mechanisms.\n"
                 "2. [Verification Scrape]: Extract raw protocol specifications from leading GitHub / ArXiv repositories.\n"
-                "3. [Dynamic Code Synthesizer]: Generate and execute Python vLLM container config for Nemotron-3 Super 120B.\n"
+                "3. [Dynamic Code Synthesizer]: Generate and execute Python container config for Haley serving.\n"
                 "4. [Synthesis Protocol]: Output verified deployment strategy with zero refusal and deterministic precision."
             )
         elif "[SYNTHESIS PROTOCOL]" in prompt:
             return (
                 "### Sovereign Technical Synthesis Protocol:\n\n"
                 "**Decentralized AI Architecture Deployment Blueprint:**\n"
-                "- **Model Backbone**: NVIDIA Nemotron-3 Super 120B A12B (FP8 Dynamic KV-Cache Quantization).\n"
+                "- **Model Backbone**: Haley (Llama-3-8B + QLoRA adapter).\n"
                 "- **Consensus Layer**: Byzantine Fault Tolerant (BFT) validation for distributed forward-pass tensors.\n"
                 "- **Inference Routing**: Asynchronous parallel batch execution over libp2p tensor streams.\n"
                 "- **Refusal Suppression**: Matrix-level logits bias (-inf on refusal IDs) ensuring 100% compliant execution.\n"
                 "- **Latency Profile**: Sub-85ms first token time with greedy decoding matrix (temperature=0.01)."
             )
-        return f"[Nemotron-3 Super 120B Tensor Inference]: Unbounded reasoning output for prompt: '{prompt[:100]}...'"
+        return f"[Haley Inference]: Reasoning output for prompt: '{prompt[:100]}...'"
 
 
 # Execution Trigger
