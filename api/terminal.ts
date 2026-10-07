@@ -1,9 +1,29 @@
-// Vercel serverless: POST /api/terminal/exec
+// Vercel serverless (consolidated): /api/terminal/*
+// Sub-routes: POST /api/terminal/exec (also accepts '' for the base path)
 // Body: { command: string, type?: 'bash'|'python', timeout?: number }
-// Returns { success, stdout, stderr, exitCode, durationMs } - always valid JSON.
-// Note: serverless has ~10s execution limit; long commands will time out.
+// Always returns valid JSON, never hangs.
 
 import { exec } from 'child_process';
+
+function getSub(req: any): string {
+  const q = req.query || {};
+  if (q.sub) return String(q.sub).replace(/^\/+|\/+$/g, '');
+  try {
+    const u = new URL(req.url || '/', 'http://localhost');
+    const p = u.pathname.replace(/\/+$/, '');
+    if (p === '/api/terminal' || p === '/api/terminal/') return '';
+    if (p.startsWith('/api/terminal/')) return p.slice('/api/terminal/'.length);
+  } catch {}
+  return '';
+}
+
+function parseBody(req: any): any {
+  let body: any = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  return body || {};
+}
 
 function runCmd(cmd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
@@ -32,10 +52,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Use POST.' });
   }
 
-  let body: any = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { body = {}; }
-  }
+  const body = parseBody(req);
   const command = (body?.command || '').toString();
   const type = (body?.type || 'bash').toString();
   const timeout = Math.max(1000, Math.min(Number(body?.timeout) || 25000, 55000));

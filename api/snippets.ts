@@ -1,8 +1,17 @@
-// Vercel serverless: GET/POST/DELETE /api/snippets
-// Code snippet library (in-memory per instance). Always valid JSON.
+// Vercel serverless (consolidated): /api/snippets
+// GET/POST/DELETE code snippet library (in-memory per instance).
+// Always returns valid JSON, never hangs.
 
 const g: any = globalThis as any;
 if (!Array.isArray(g.__snippets)) g.__snippets = [];
+
+function parseBody(req: any): any {
+  let body: any = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  return body || {};
+}
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
@@ -15,8 +24,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, snippets: g.__snippets });
   }
 
-  let body: any = req.body;
-  if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+  const body = parseBody(req);
 
   if (req.method === 'POST') {
     const title = (body?.title || '').toString().trim();

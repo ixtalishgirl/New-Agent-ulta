@@ -1,5 +1,5 @@
-// Vercel serverless: GET /api/system/status
-// System dashboard: model health, server stats, tools. Always valid JSON.
+// Vercel serverless (consolidated): /api/system/status
+// System dashboard: model health, server stats, tools. Always valid JSON, never hangs.
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
